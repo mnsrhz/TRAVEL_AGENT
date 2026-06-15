@@ -29,18 +29,16 @@ def run_tool_with_policy(
     if not settings.has_key(required_key):
         message = f"Missing {required_key} for {tool_name}"
         if settings.allow_demo_fallbacks:
-            result = fallback_call()
-            logger.log(
-                node=tool_name,
-                event_type="tool_completed",
-                action="used_demo_fallback",
+            return _run_fallback(
+                state=state,
+                logger=logger,
+                tool_name=tool_name,
+                fallback_call=fallback_call,
                 input_summary=input_summary,
-                output_summary=f"{tool_name} returned labeled fallback data",
-                status="fallback",
-                tool_calls_used=1,
-                error=message,
+                source_error=message,
+                action="used_demo_fallback",
+                tool_calls_used=0,
             )
-            return result
         state.current_state = WorkflowState.FAILED
         logger.log(
             node=tool_name,
@@ -69,18 +67,16 @@ def run_tool_with_policy(
     except Exception as exc:
         message = f"{tool_name} failed: {exc}"
         if settings.allow_demo_fallbacks:
-            result = fallback_call()
-            logger.log(
-                node=tool_name,
-                event_type="tool_completed",
-                action="fallback_after_live_failure",
+            return _run_fallback(
+                state=state,
+                logger=logger,
+                tool_name=tool_name,
+                fallback_call=fallback_call,
                 input_summary=input_summary,
-                output_summary=f"{tool_name} returned labeled fallback data",
-                status="fallback",
+                source_error=message,
+                action="fallback_after_live_failure",
                 tool_calls_used=1,
-                error=message,
             )
-            return result
         state.current_state = WorkflowState.FAILED
         logger.log(
             node=tool_name,
@@ -93,3 +89,44 @@ def run_tool_with_policy(
             error=message,
         )
         raise ToolExecutionError(message) from exc
+
+
+def _run_fallback(
+    *,
+    state: TravelState,
+    logger: TraceLogger,
+    tool_name: str,
+    fallback_call: Callable[[], T],
+    input_summary: str,
+    source_error: str,
+    action: str,
+    tool_calls_used: int,
+) -> T:
+    try:
+        result = fallback_call()
+    except Exception as exc:
+        message = f"{tool_name} fallback failed after {source_error}: {exc}"
+        state.current_state = WorkflowState.FAILED
+        logger.log(
+            node=tool_name,
+            event_type="tool_failed",
+            action="fallback_failure",
+            input_summary=input_summary,
+            output_summary="Fallback data generation failed",
+            status="error",
+            tool_calls_used=tool_calls_used,
+            error=message,
+        )
+        raise ToolExecutionError(message) from exc
+
+    logger.log(
+        node=tool_name,
+        event_type="tool_completed",
+        action=action,
+        input_summary=input_summary,
+        output_summary=f"{tool_name} returned labeled fallback data",
+        status="fallback",
+        tool_calls_used=tool_calls_used,
+        error=source_error,
+    )
+    return result
