@@ -3,6 +3,7 @@ import pytest
 from src.config.settings import Settings
 from src.state.travel_state import TravelState
 from src.tools.google_maps_tools import estimate_transit
+from src.tools.google_maps_tools import _extract_distance_matrix_result
 from src.tools.google_places_tools import search_restaurants
 from src.tools.policy import ToolExecutionError, run_tool_with_policy
 from src.tools.serpapi_tools import search_flights, search_hotels
@@ -113,8 +114,19 @@ def test_policy_raises_traceable_error_when_live_call_fails_in_strict_mode():
 def test_tool_adapters_return_fallback_data_when_enabled():
     settings = Settings(None, None, None, None, allow_demo_fallbacks=True)
     state = TravelState()
-    assert search_flights(state, settings, {"origin": "SFO", "destination": "Tokyo"})
-    assert search_hotels(state, settings, {"destination": "Tokyo"})
-    assert search_attractions(state, settings, {"destination": "Japan"})
-    assert search_restaurants(state, settings, {"city": "Tokyo", "dietary": "vegetarian"})
-    assert estimate_transit(state, settings, {"origin": "Shinjuku", "destination": "Asakusa"})
+    flights = search_flights(state, settings, {"origin": "SFO", "destination": "Tokyo"})
+    hotels = search_hotels(state, settings, {"destination": "Tokyo"})
+    attractions = search_attractions(state, settings, {"destination": "Japan"})
+    restaurants = search_restaurants(state, settings, {"city": "Tokyo", "dietary": "vegetarian"})
+    transit = estimate_transit(state, settings, {"origin": "Shinjuku", "destination": "Asakusa"})
+
+    assert {"title", "source"}.issubset(flights[0])
+    assert {"name", "nightly_price", "source"}.issubset(hotels[0])
+    assert {"name", "duration_hours", "source"}.issubset(attractions[0])
+    assert {"name", "dietary", "source"}.issubset(restaurants[0])
+    assert {"origin", "destination", "duration_minutes", "source"}.issubset(transit[0])
+
+
+def test_google_maps_parser_raises_clear_error_for_malformed_payload():
+    with pytest.raises(RuntimeError, match="missing route duration"):
+        _extract_distance_matrix_result({"rows": [{"elements": [{"status": "OK"}]}]}, {"origin": "A", "destination": "B"})

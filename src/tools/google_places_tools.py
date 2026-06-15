@@ -1,5 +1,3 @@
-import googlemaps
-
 from src.config.settings import Settings
 from src.state.travel_state import TravelState
 from src.tools import fallback_data
@@ -19,6 +17,8 @@ def search_restaurants(state: TravelState, settings: Settings, query: dict) -> l
 
 
 def _search_places(settings: Settings, query: dict) -> list[dict]:
+    import googlemaps
+
     client = googlemaps.Client(key=settings.google_maps_api_key)
     text = f"{query.get('dietary', '')} restaurants in {query.get('city')}"
     response = client.places(query=text, type="restaurant")

@@ -1,5 +1,3 @@
-from tavily import TavilyClient
-
 from src.config.settings import Settings
 from src.state.travel_state import TravelState
 from src.tools import fallback_data
@@ -19,6 +17,8 @@ def search_attractions(state: TravelState, settings: Settings, query: dict) -> l
 
 
 def _search_tavily(settings: Settings, query: dict) -> list[dict]:
+    from tavily import TavilyClient
+
     client = TavilyClient(api_key=settings.tavily_api_key)
     response = client.search(
         query=f"best attractions and local travel tips for {query.get('destination')}",
