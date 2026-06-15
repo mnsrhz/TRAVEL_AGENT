@@ -1,6 +1,8 @@
 import pytest
 
-from src.exports.itinerary_export import itinerary_to_markdown
+from src.exports.itinerary_export import itinerary_to_markdown, trace_to_json_bytes
+from src.observability.trace_logger import TraceLogger
+from src.state.travel_state import TravelState
 from src.tools.calendar_tools import CalendarExportError, generate_ics
 
 
@@ -73,3 +75,20 @@ def test_itinerary_markdown_escapes_special_characters_and_newlines():
 
     assert "Lunch \\*special\\* \\[vegan\\]" in markdown
     assert "Line one Line two" in markdown
+
+
+def test_trace_to_json_bytes_exports_trace_events():
+    state = TravelState()
+    TraceLogger(state).log(
+        node="Calendar Agent",
+        event_type="node_completed",
+        action="generated_ics",
+        input_summary="Approved itinerary",
+        output_summary="Created calendar file",
+        status="success",
+    )
+
+    payload = trace_to_json_bytes(state).decode("utf-8")
+
+    assert '"node": "Calendar Agent"' in payload
+    assert '"action": "generated_ics"' in payload
