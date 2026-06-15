@@ -14,10 +14,14 @@ def review_itinerary(itinerary: list[dict], preferences: dict) -> dict:
 
     dietary = preferences.get("dietary", "none")
     if dietary not in {"none", "", None}:
-        meal_events = [event for day in itinerary for event in day.get("events", []) if event.get("type") == "meal"]
-        if not meal_events:
+        days_without_meals = [
+            day.get("day")
+            for day in itinerary
+            if not any(event.get("type") == "meal" for event in day.get("events", []))
+        ]
+        if days_without_meals:
             score -= 1
-            findings.append("Dietary preference is present but no meal events were planned.")
+            findings.append(f"Dietary preference is present but days {days_without_meals} have no meal events.")
 
     score = max(1.0, min(10.0, score))
     return {

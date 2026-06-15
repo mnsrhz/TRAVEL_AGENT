@@ -20,7 +20,9 @@ def _event(day: datetime, start_hour: int, duration_hours: float, title: str, lo
 
 def build_demo_itinerary(preferences: dict) -> list[dict]:
     start_date = datetime.fromisoformat(preferences.get("start_date", "2026-10-10"))
-    city_by_day = ["Tokyo"] * 4 + ["Kyoto"] * 3 + ["Osaka"] * 3
+    day_count = max(1, int(preferences.get("days", 10)))
+    destination = str(preferences.get("destination", "Japan")).lower()
+    city_by_day = _city_sequence(day_count, destination)
     highlights = {
         "Tokyo": ["Senso-ji Temple", "Shibuya Crossing", "Harajuku walk"],
         "Kyoto": ["Fushimi Inari Taisha", "Gion district", "Kiyomizu-dera"],
@@ -43,3 +45,12 @@ def build_demo_itinerary(preferences: dict) -> list[dict]:
             }
         )
     return itinerary
+
+
+def _city_sequence(day_count: int, destination: str) -> list[str]:
+    if "japan" not in destination:
+        return [destination.title() or "Destination"] * day_count
+    template = ["Tokyo", "Tokyo", "Tokyo", "Tokyo", "Kyoto", "Kyoto", "Kyoto", "Osaka", "Osaka", "Osaka"]
+    if day_count <= len(template):
+        return template[:day_count]
+    return template + ["Osaka"] * (day_count - len(template))

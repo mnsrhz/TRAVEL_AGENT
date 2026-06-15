@@ -11,10 +11,15 @@ APPROVAL_GATES = (
 
 
 def approve(state: TravelState, gate: str) -> None:
-    if gate not in APPROVAL_GATES:
-        raise ValueError(f"Unknown approval gate: {gate}")
+    _validate_gate(gate)
     state.approvals[gate] = True
 
 
 def is_approved(state: TravelState, gate: str) -> bool:
+    _validate_gate(gate)
     return state.approvals.get(gate) is True
+
+
+def _validate_gate(gate: str) -> None:
+    if gate not in APPROVAL_GATES:
+        raise ValueError(f"Unknown approval gate: {gate}")
