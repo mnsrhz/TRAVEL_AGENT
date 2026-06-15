@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from numbers import Integral
 
 from src.state.travel_state import TraceEvent, TravelState
 
@@ -25,6 +26,8 @@ class TraceLogger:
         max_loop_count: int = 0,
         error: str | None = None,
     ) -> TraceEvent:
+        tokens_used = _non_negative_int(tokens_used)
+        tool_calls_used = _non_negative_int(tool_calls_used)
         event = TraceEvent(
             step=len(self.state.trace_events) + 1,
             timestamp=self.state.now(),
@@ -51,3 +54,9 @@ class TraceLogger:
 
     def to_json(self) -> str:
         return json.dumps([event.to_dict() for event in self.state.trace_events], indent=2)
+
+
+def _non_negative_int(value: int) -> int:
+    if not isinstance(value, Integral):
+        return 0
+    return max(0, int(value))

@@ -75,3 +75,10 @@ class TravelState:
 
     def now(self) -> str:
         return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data["current_state"] = self.current_state.value
+        data["trace_events"] = [event.to_dict() for event in self.trace_events]
+        data["generated_ics"] = "<generated>" if self.generated_ics else None
+        return data
