@@ -2,7 +2,11 @@ import pytest
 
 from src.config.settings import Settings
 from src.state.travel_state import TravelState
+from src.tools.google_maps_tools import estimate_transit
+from src.tools.google_places_tools import search_restaurants
 from src.tools.policy import ToolExecutionError, run_tool_with_policy
+from src.tools.serpapi_tools import search_flights, search_hotels
+from src.tools.tavily_tools import search_attractions
 
 
 def test_policy_uses_fallback_when_key_missing_and_flag_on():
@@ -104,3 +108,13 @@ def test_policy_raises_traceable_error_when_live_call_fails_in_strict_mode():
     assert state.trace_events[-1].status == "error"
     assert state.trace_events[-1].tool_calls_used == 1
     assert "quota exceeded" in state.errors[-1]
+
+
+def test_tool_adapters_return_fallback_data_when_enabled():
+    settings = Settings(None, None, None, None, allow_demo_fallbacks=True)
+    state = TravelState()
+    assert search_flights(state, settings, {"origin": "SFO", "destination": "Tokyo"})
+    assert search_hotels(state, settings, {"destination": "Tokyo"})
+    assert search_attractions(state, settings, {"destination": "Japan"})
+    assert search_restaurants(state, settings, {"city": "Tokyo", "dietary": "vegetarian"})
+    assert estimate_transit(state, settings, {"origin": "Shinjuku", "destination": "Asakusa"})
