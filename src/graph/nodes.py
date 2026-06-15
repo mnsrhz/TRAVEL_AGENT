@@ -43,8 +43,17 @@ def research_options(state: TravelState, settings: Settings) -> TravelState:
     state.flights = search_flights(state, settings, state.preferences)
     state.hotels = search_hotels(state, settings, state.preferences)
     state.attractions = search_attractions(state, settings, state.preferences)
-    state.restaurants = search_restaurants(state, settings, {"city": "Tokyo", "dietary": state.preferences.get("dietary")})
-    state.transit_estimates = estimate_transit(state, settings, {"origin": "Shinjuku", "destination": "Asakusa"})
+    research_city = _primary_city(state)
+    state.restaurants = search_restaurants(
+        state,
+        settings,
+        {"city": research_city, "dietary": state.preferences.get("dietary")},
+    )
+    state.transit_estimates = estimate_transit(
+        state,
+        settings,
+        {"origin": research_city, "destination": f"Central {research_city}"},
+    )
     state.current_state = WorkflowState.AWAITING_DESTINATION_APPROVAL
     TraceLogger(state).log(
         node="Research Node",
@@ -55,6 +64,13 @@ def research_options(state: TravelState, settings: Settings) -> TravelState:
         status="success",
     )
     return state
+
+
+def _primary_city(state: TravelState) -> str:
+    cities = state.destination_plan.get("cities") or []
+    if cities and cities[0].get("city"):
+        return cities[0]["city"]
+    return str(state.preferences.get("destination") or "Destination")
 
 
 def build_itinerary(state: TravelState) -> TravelState:
