@@ -26,3 +26,13 @@ def test_settings_reports_missing_keys(monkeypatch):
         "GOOGLE_MAPS_API_KEY",
     ]
     assert settings.has_key("OPENAI_API_KEY") is False
+
+
+def test_settings_treats_whitespace_only_keys_as_missing(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "   ")
+    monkeypatch.setenv("SERPAPI_API_KEY", "serp")
+    monkeypatch.setenv("TAVILY_API_KEY", "tavily")
+    monkeypatch.setenv("GOOGLE_MAPS_API_KEY", "maps")
+    settings = Settings.from_env()
+    assert settings.openai_api_key is None
+    assert settings.missing_keys == ["OPENAI_API_KEY"]

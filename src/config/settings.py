@@ -12,8 +12,21 @@ REQUIRED_API_KEYS = (
 )
 
 
+ENV_FIELD_MAP = {
+    "OPENAI_API_KEY": "openai_api_key",
+    "SERPAPI_API_KEY": "serpapi_api_key",
+    "TAVILY_API_KEY": "tavily_api_key",
+    "GOOGLE_MAPS_API_KEY": "google_maps_api_key",
+}
+
+
 def _parse_bool(value: str | None) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _clean_env(value: str | None) -> str | None:
+    cleaned = str(value or "").strip()
+    return cleaned or None
 
 
 @dataclass(frozen=True)
@@ -27,10 +40,10 @@ class Settings:
     @classmethod
     def from_env(cls) -> "Settings":
         return cls(
-            openai_api_key=os.getenv("OPENAI_API_KEY") or None,
-            serpapi_api_key=os.getenv("SERPAPI_API_KEY") or None,
-            tavily_api_key=os.getenv("TAVILY_API_KEY") or None,
-            google_maps_api_key=os.getenv("GOOGLE_MAPS_API_KEY") or None,
+            openai_api_key=_clean_env(os.getenv("OPENAI_API_KEY")),
+            serpapi_api_key=_clean_env(os.getenv("SERPAPI_API_KEY")),
+            tavily_api_key=_clean_env(os.getenv("TAVILY_API_KEY")),
+            google_maps_api_key=_clean_env(os.getenv("GOOGLE_MAPS_API_KEY")),
             allow_demo_fallbacks=_parse_bool(os.getenv("ALLOW_DEMO_FALLBACKS")),
         )
 
@@ -40,12 +53,7 @@ class Settings:
 
     @property
     def key_map(self) -> dict[str, str | None]:
-        return {
-            "OPENAI_API_KEY": self.openai_api_key,
-            "SERPAPI_API_KEY": self.serpapi_api_key,
-            "TAVILY_API_KEY": self.tavily_api_key,
-            "GOOGLE_MAPS_API_KEY": self.google_maps_api_key,
-        }
+        return {key: getattr(self, ENV_FIELD_MAP[key]) for key in REQUIRED_API_KEYS}
 
     @property
     def missing_keys(self) -> list[str]:
