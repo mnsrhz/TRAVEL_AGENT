@@ -182,11 +182,15 @@ def test_serpapi_flights_normalizes_country_destination_to_iata(monkeypatch):
     result = search_flights(
         TravelState(),
         Settings(None, "serp-key", None, None, allow_demo_fallbacks=False),
-        {"origin": "SFO", "destination": "Japan", "start_date": "2026-09-01"},
+        {"origin": "SFO", "destination": "Japan", "start_date": "2026-09-01", "days": 10},
     )
 
+    assert calls[0]["params"]["engine"] == "google_flights"
     assert calls[0]["params"]["departure_id"] == "SFO"
     assert calls[0]["params"]["arrival_id"] == "TYO"
+    assert calls[0]["params"]["type"] == "1"
+    assert calls[0]["params"]["outbound_date"] == "2026-09-01"
+    assert calls[0]["params"]["return_date"] == "2026-09-11"
     assert result == [{"airline": "Demo Air"}]
 
 

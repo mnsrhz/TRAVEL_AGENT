@@ -44,8 +44,9 @@ def search_flights(state: TravelState, settings: Settings, query: dict) -> list[
                 "engine": "google_flights",
                 "departure_id": _flight_location_id(query.get("origin"), field_name="origin"),
                 "arrival_id": _flight_location_id(query.get("destination"), field_name="destination"),
-                "outbound_date": query.get("start_date"),
+                "type": "1",
                 "currency": "USD",
+                **_flight_date_params(query),
             },
         ),
         fallback_call=lambda: fallback_data.DEMO_FLIGHTS,
@@ -131,6 +132,18 @@ def _hotel_date_params(query: dict) -> dict[str, str]:
     return {
         "check_in_date": check_in.isoformat(),
         "check_out_date": check_out.isoformat(),
+    }
+
+
+def _flight_date_params(query: dict) -> dict[str, str]:
+    outbound_date = _parse_iso_date(query.get("start_date"))
+    if not outbound_date:
+        raise RuntimeError("SerpAPI Flights requires a valid start_date for outbound_date")
+    days = _coerce_positive_int(query.get("days"), default=1)
+    return_date = outbound_date + timedelta(days=days)
+    return {
+        "outbound_date": outbound_date.isoformat(),
+        "return_date": return_date.isoformat(),
     }
 
 
