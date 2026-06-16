@@ -28,6 +28,7 @@ def ingest_user_message(
 ) -> tuple[dict[str, Any], str, bool]:
     preferences = dict(existing_preferences)
     preferences.update(extract_preferences(message, settings=settings, existing_preferences=existing_preferences))
+    preferences.update(_extract_contextual_follow_up(existing_preferences, preferences, message))
     missing = missing_required_fields(preferences)
     if missing:
         return preferences, FOLLOW_UP_QUESTIONS[missing[0]], False
@@ -114,6 +115,43 @@ def _extract_preferences_with_openai(settings: Settings, existing_preferences: d
     except Exception:
         return {}
     return _clean_live_preferences(parsed)
+
+
+def _extract_contextual_follow_up(
+    existing_preferences: dict[str, Any],
+    merged_preferences: dict[str, Any],
+    message: str,
+) -> dict[str, Any]:
+    missing_before = missing_required_fields(existing_preferences)
+    if not missing_before:
+        return {}
+    current_field = missing_before[0]
+    if merged_preferences.get(current_field):
+        return {}
+    value = _coerce_follow_up_value(current_field, message)
+    return {current_field: value} if value not in {None, ""} else {}
+
+
+def _coerce_follow_up_value(field: str, message: str) -> Any:
+    text = message.strip()
+    if not text:
+        return None
+    if field == "origin":
+        origin = _clean_place(text)
+        return origin.upper() if len(origin) == 3 else origin
+    if field == "destination":
+        return _clean_place(text)
+    if field == "days":
+        return _extract_days(text)
+    if field == "start_date":
+        return _extract_start_date(text)
+    if field == "budget":
+        return _extract_budget(text)
+    if field == "pace":
+        return _extract_pace(text)
+    if field == "dietary":
+        return _extract_dietary(text) or _clean_place(text).lower()
+    return None
 
 
 def _clean_live_preferences(payload: dict[str, Any]) -> dict[str, Any]:

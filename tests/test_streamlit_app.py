@@ -100,6 +100,29 @@ def test_streamlit_app_fallback_mode_requires_each_approval_gate(monkeypatch):
     }
 
 
+def test_streamlit_app_accepts_short_origin_follow_up(monkeypatch):
+    for key in REQUIRED_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("ALLOW_DEMO_FALLBACKS", "true")
+
+    app = AppTest.from_file("streamlit_app.py")
+    app.run(timeout=10)
+    submit_trip_chat(
+        app,
+        "Plan a 10 day Japan trip starting 2026-10-10, vegetarian, moderate pace, budget $3500.",
+    )
+
+    state = app.session_state["travel_state"]
+    assert state.current_state == WorkflowState.COLLECTING_REQUIREMENTS
+    assert state.user_input.get("origin") is None
+
+    submit_trip_chat(app, "SFO")
+
+    state = app.session_state["travel_state"]
+    assert state.user_input["origin"] == "SFO"
+    assert state.current_state == WorkflowState.AWAITING_PREFERENCE_APPROVAL
+
+
 def test_streamlit_app_exports_markdown_and_trace_before_calendar_ics(monkeypatch):
     for key in REQUIRED_ENV_KEYS:
         monkeypatch.delenv(key, raising=False)

@@ -42,3 +42,20 @@ def test_chat_intake_merges_follow_up_answers():
     assert preferences["budget"] == 4200
     assert preferences["dietary"] == "none"
     assert reply.startswith("I have the essentials")
+
+
+def test_chat_intake_uses_missing_field_context_for_short_origin_answer():
+    existing = {
+        "destination": "Japan",
+        "days": 10,
+        "start_date": "2026-10-10",
+        "budget": 3500,
+        "pace": "moderate",
+        "dietary": "vegetarian",
+    }
+
+    preferences, reply, ready = ingest_user_message(existing, "SFO")
+
+    assert ready is True
+    assert preferences["origin"] == "SFO"
+    assert reply.startswith("I have the essentials")
