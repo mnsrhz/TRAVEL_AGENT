@@ -36,3 +36,19 @@ def test_settings_treats_whitespace_only_keys_as_missing(monkeypatch):
     settings = Settings.from_env()
     assert settings.openai_api_key is None
     assert settings.missing_keys == ["OPENAI_API_KEY"]
+
+
+def test_settings_can_read_streamlit_cloud_secrets():
+    settings = Settings.from_sources(
+        {},
+        {
+            "OPENAI_API_KEY": "openai",
+            "SERPAPI_API_KEY": "serp",
+            "TAVILY_API_KEY": "tavily",
+            "GOOGLE_MAPS_API_KEY": "maps",
+            "ALLOW_DEMO_FALLBACKS": "on",
+        },
+    )
+    assert settings.openai_api_key == "openai"
+    assert settings.missing_keys == []
+    assert settings.allow_demo_fallbacks is True

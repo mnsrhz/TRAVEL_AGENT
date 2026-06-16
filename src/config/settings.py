@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import Mapping
 
 
 REQUIRED_API_KEYS = (
@@ -29,6 +30,15 @@ def _clean_env(value: str | None) -> str | None:
     return cleaned or None
 
 
+def _lookup_setting(env: Mapping[str, str], secrets: Mapping[str, object] | None, key: str) -> str | None:
+    env_value = _clean_env(env.get(key))
+    if env_value:
+        return env_value
+    if secrets is None:
+        return None
+    return _clean_env(str(secrets.get(key, "")))
+
+
 @dataclass(frozen=True)
 class Settings:
     openai_api_key: str | None
@@ -39,12 +49,16 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        return cls.from_sources(os.environ, None)
+
+    @classmethod
+    def from_sources(cls, env: Mapping[str, str], secrets: Mapping[str, object] | None = None) -> "Settings":
         return cls(
-            openai_api_key=_clean_env(os.getenv("OPENAI_API_KEY")),
-            serpapi_api_key=_clean_env(os.getenv("SERPAPI_API_KEY")),
-            tavily_api_key=_clean_env(os.getenv("TAVILY_API_KEY")),
-            google_maps_api_key=_clean_env(os.getenv("GOOGLE_MAPS_API_KEY")),
-            allow_demo_fallbacks=_parse_bool(os.getenv("ALLOW_DEMO_FALLBACKS")),
+            openai_api_key=_lookup_setting(env, secrets, "OPENAI_API_KEY"),
+            serpapi_api_key=_lookup_setting(env, secrets, "SERPAPI_API_KEY"),
+            tavily_api_key=_lookup_setting(env, secrets, "TAVILY_API_KEY"),
+            google_maps_api_key=_lookup_setting(env, secrets, "GOOGLE_MAPS_API_KEY"),
+            allow_demo_fallbacks=_parse_bool(_lookup_setting(env, secrets, "ALLOW_DEMO_FALLBACKS")),
         )
 
     @property
