@@ -163,6 +163,49 @@ def test_streamlit_app_shows_draft_preferences_during_chat_collection(monkeypatc
     assert "Where will you be traveling from?" in markdown
 
 
+def test_streamlit_app_shows_clean_destination_after_follow_up(monkeypatch):
+    for key in REQUIRED_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("ALLOW_DEMO_FALLBACKS", "true")
+
+    app = AppTest.from_file("streamlit_app.py")
+    app.run(timeout=10)
+    submit_trip_chat(
+        app,
+        "Plan a 10 day trip from SFO starting 2026-09-01, vegetarian, moderate pace, budget $3500.",
+    )
+    submit_trip_chat(app, "and I want to go to Japan")
+
+    state = app.session_state["travel_state"]
+    markdown = "\n".join(item.value for item in app.markdown)
+    assert state.user_input["destination"] == "Japan"
+    assert "Japan" in markdown
+    assert "And I Want To" not in markdown
+    assert "Go To Japan" not in markdown
+
+
+def test_streamlit_app_shows_clean_preferences_from_full_conversational_prompt(monkeypatch):
+    for key in REQUIRED_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("ALLOW_DEMO_FALLBACKS", "true")
+
+    app = AppTest.from_file("streamlit_app.py")
+    app.run(timeout=10)
+    submit_trip_chat(
+        app,
+        "I am traveling from SFO and I want to go to Japan on Sep 1st for 10 days, vegetarian, moderate pace, budget $3500",
+    )
+
+    state = app.session_state["travel_state"]
+    markdown = "\n".join(item.value for item in app.markdown)
+    assert state.user_input["origin"] == "SFO"
+    assert state.user_input["destination"] == "Japan"
+    assert "Japan" in markdown
+    assert "SFO" in markdown
+    assert "Sfo And I Want" not in markdown
+    assert "Go To Japan" not in markdown
+
+
 def test_streamlit_app_does_not_render_fake_approval_buttons(monkeypatch):
     for key in REQUIRED_ENV_KEYS:
         monkeypatch.delenv(key, raising=False)

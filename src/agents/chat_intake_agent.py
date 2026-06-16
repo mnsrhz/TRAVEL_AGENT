@@ -203,7 +203,7 @@ def _extract_days(text: str) -> int | None:
 
 def _extract_origin(text: str) -> str | None:
     match = re.search(
-        r"(?:from|departing from|leaving from)\s+([A-Za-z]{3}|[A-Za-z][A-Za-z\s]+?)(?=\s+(?:to|starting|start|on|with|around|under|for|budget)|[,\.]|$)",
+        r"(?:from|departing from|leaving from)\s+([A-Za-z]{3}|[A-Za-z][A-Za-z\s]+?)(?=\s+(?:and\s+i\s+want|and\s+i\s+would|to|starting|start|on|with|around|under|for|budget)|[,\.]|$)",
         text,
         flags=re.IGNORECASE,
     )
@@ -269,6 +269,7 @@ def _clean_place(value: str) -> str:
         value,
         flags=re.IGNORECASE,
     )
+    value = re.sub(r"^\s*(?:visit|see)\s+", "", value, flags=re.IGNORECASE)
     value = re.sub(r"^\s*(?:go|travel)\s+to\s+", "", value, flags=re.IGNORECASE)
     value = re.sub(r"\b(trip|travel|vacation|holiday)\b", "", value, flags=re.IGNORECASE)
     return " ".join(value.strip(" ,.-").split()).title()

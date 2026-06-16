@@ -105,6 +105,36 @@ def test_chat_intake_ignores_destination_filler_from_live_extraction(monkeypatch
     assert "And I Want To" not in preferences.values()
 
 
+def test_chat_intake_keeps_origin_clean_before_conversational_destination():
+    preferences, reply, ready = ingest_user_message(
+        {},
+        "I am traveling from SFO and I want to go to Japan on Sep 1st for 10 days, vegetarian, moderate pace, budget $3500",
+    )
+
+    assert ready is True
+    assert preferences["origin"] == "SFO"
+    assert preferences["destination"] == "Japan"
+    assert reply.startswith("I have the essentials")
+
+
+def test_chat_intake_cleans_visit_destination_phrase():
+    preferences, reply, ready = ingest_user_message(
+        {
+            "days": 7,
+            "origin": "NYC",
+            "start_date": "2026-09-01",
+            "budget": 4200,
+            "pace": "relaxed",
+            "dietary": "none",
+        },
+        "I would like to visit Italy",
+    )
+
+    assert ready is True
+    assert preferences["destination"] == "Italy"
+    assert reply.startswith("I have the essentials")
+
+
 def test_chat_intake_handles_contextual_follow_up_without_live_llm(monkeypatch):
     def fail_live_call(settings, existing, message):
         raise AssertionError("Live extraction should not be called for a contextual short answer")
