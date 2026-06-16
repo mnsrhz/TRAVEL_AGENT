@@ -161,6 +161,52 @@ def test_serpapi_hotels_includes_required_dates(monkeypatch):
     assert result == [{"name": "Tokyo Stay", "rate_per_night": {"lowest": "$180"}}]
 
 
+def test_serpapi_flights_normalizes_country_destination_to_iata(monkeypatch):
+    calls = []
+
+    class Response:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"best_flights": [{"airline": "Demo Air"}]}
+
+    def fake_get(url, *, params, timeout):
+        calls.append({"url": url, "params": params, "timeout": timeout})
+        return Response()
+
+    monkeypatch.setattr("src.tools.serpapi_tools.requests.get", fake_get)
+
+    result = search_flights(
+        TravelState(),
+        Settings(None, "serp-key", None, None, allow_demo_fallbacks=False),
+        {"origin": "SFO", "destination": "Japan", "start_date": "2026-09-01"},
+    )
+
+    assert calls[0]["params"]["departure_id"] == "SFO"
+    assert calls[0]["params"]["arrival_id"] == "TYO"
+    assert result == [{"airline": "Demo Air"}]
+
+
+def test_serpapi_flights_rejects_unknown_plain_destination_before_live_call(monkeypatch):
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("SerpAPI should not be called with an invalid arrival_id")
+
+    monkeypatch.setattr("src.tools.serpapi_tools.requests.get", fail_if_called)
+
+    with pytest.raises(ToolExecutionError) as exc:
+        search_flights(
+            TravelState(),
+            Settings(None, "serp-key", None, None, allow_demo_fallbacks=False),
+            {"origin": "SFO", "destination": "And I Want To", "start_date": "2026-09-01"},
+        )
+
+    assert "valid flight destination code" in str(exc.value)
+    assert "Japan" not in str(exc.value)
+
+
 def test_serpapi_errors_do_not_expose_api_key(monkeypatch):
     class Response:
         status_code = 400
@@ -188,7 +234,7 @@ def test_serpapi_errors_do_not_expose_api_key(monkeypatch):
     message = str(exc.value)
     assert "secret-key" not in message
     assert "api_key" not in message
-    assert "arrival_id is invalid" in message
+    assert "valid flight destination code" in message
 
 
 def test_google_maps_parser_raises_clear_error_for_malformed_payload():

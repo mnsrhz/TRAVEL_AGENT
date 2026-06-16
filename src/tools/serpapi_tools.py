@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta
 
 import requests
@@ -8,6 +9,27 @@ from src.config.settings import Settings
 from src.state.travel_state import TravelState
 from src.tools import fallback_data
 from src.tools.policy import run_tool_with_policy
+
+
+FLIGHT_LOCATION_IDS = {
+    "australia": "SYD",
+    "bali": "DPS",
+    "canada": "YTO",
+    "france": "PAR",
+    "greece": "ATH",
+    "india": "DEL",
+    "italy": "ROM",
+    "japan": "TYO",
+    "mexico": "MEX",
+    "south korea": "SEL",
+    "spain": "MAD",
+    "thailand": "BKK",
+    "turkey": "IST",
+    "united arab emirates": "DXB",
+    "uae": "DXB",
+    "united kingdom": "LON",
+    "uk": "LON",
+}
 
 
 def search_flights(state: TravelState, settings: Settings, query: dict) -> list[dict]:
@@ -20,8 +42,8 @@ def search_flights(state: TravelState, settings: Settings, query: dict) -> list[
             settings,
             {
                 "engine": "google_flights",
-                "departure_id": query.get("origin"),
-                "arrival_id": query.get("destination"),
+                "departure_id": _flight_location_id(query.get("origin"), field_name="origin"),
+                "arrival_id": _flight_location_id(query.get("destination"), field_name="destination"),
                 "outbound_date": query.get("start_date"),
                 "currency": "USD",
             },
@@ -62,6 +84,23 @@ def _serpapi_search(settings: Settings, params: dict) -> list[dict]:
     if params["engine"] == "google_flights":
         return data.get("best_flights") or data.get("other_flights") or []
     return data.get("properties") or []
+
+
+def _flight_location_id(value: object, *, field_name: str) -> str:
+    cleaned = str(value or "").strip()
+    if _is_serpapi_flight_id(cleaned):
+        return cleaned.upper() if len(cleaned) == 3 else cleaned
+    mapped = FLIGHT_LOCATION_IDS.get(cleaned.lower())
+    if mapped:
+        return mapped
+    raise RuntimeError(
+        f"SerpAPI Flights requires a valid flight {field_name} code. "
+        f"Use an uppercase 3-letter airport/city code or a supported destination name."
+    )
+
+
+def _is_serpapi_flight_id(value: str) -> bool:
+    return bool(re.fullmatch(r"[A-Za-z]{3}", value) or re.fullmatch(r"/[mg]/.+", value))
 
 
 def _raise_for_serpapi_error(response: requests.Response, engine: str) -> None:
