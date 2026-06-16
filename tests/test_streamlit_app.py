@@ -12,6 +12,13 @@ REQUIRED_ENV_KEYS = (
 )
 
 
+FULL_TRIP_PROMPT = "Plan a 10 day Japan trip from SFO starting 2026-10-10, vegetarian, moderate pace, budget $3500."
+
+
+def submit_trip_chat(app: AppTest, message: str = FULL_TRIP_PROMPT) -> AppTest:
+    return app.chat_input(key="trip_chat_input").set_value(message).run(timeout=10)
+
+
 def test_streamlit_app_runs_without_local_secrets(monkeypatch):
     for key in REQUIRED_ENV_KEYS:
         monkeypatch.delenv(key, raising=False)
@@ -22,13 +29,27 @@ def test_streamlit_app_runs_without_local_secrets(monkeypatch):
     assert not app.exception
 
 
+def test_streamlit_app_uses_chat_intake_instead_of_trip_form(monkeypatch):
+    for key in REQUIRED_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+
+    app = AppTest.from_file("streamlit_app.py")
+    app.run(timeout=10)
+
+    assert not app.exception
+    assert len(app.chat_input) == 1
+    assert app.text_input == []
+    assert app.number_input == []
+    assert app.selectbox == []
+
+
 def test_streamlit_app_strict_mode_stops_when_keys_are_missing(monkeypatch):
     for key in REQUIRED_ENV_KEYS:
         monkeypatch.delenv(key, raising=False)
 
     app = AppTest.from_file("streamlit_app.py")
     app.run(timeout=10)
-    app.button(key="start_planning").click().run(timeout=10)
+    submit_trip_chat(app)
 
     state = app.session_state["travel_state"]
     assert not app.exception
@@ -48,7 +69,7 @@ def test_streamlit_app_fallback_mode_requires_each_approval_gate(monkeypatch):
 
     app = AppTest.from_file("streamlit_app.py")
     app.run(timeout=10)
-    app.button(key="start_planning").click().run(timeout=10)
+    submit_trip_chat(app)
 
     state = app.session_state["travel_state"]
     assert not app.exception
@@ -86,7 +107,7 @@ def test_streamlit_app_exports_markdown_and_trace_before_calendar_ics(monkeypatc
 
     app = AppTest.from_file("streamlit_app.py")
     app.run(timeout=10)
-    app.button(key="start_planning").click().run(timeout=10)
+    submit_trip_chat(app)
     for key in (
         "approve_preference_confirmation",
         "approve_destination_city_split",
@@ -123,7 +144,7 @@ def test_streamlit_app_new_submission_resets_previous_trip_state(monkeypatch):
 
     app = AppTest.from_file("streamlit_app.py")
     app.run(timeout=10)
-    app.button(key="start_planning").click().run(timeout=10)
+    submit_trip_chat(app)
     for key in (
         "approve_preference_confirmation",
         "approve_destination_city_split",
@@ -137,12 +158,12 @@ def test_streamlit_app_new_submission_resets_previous_trip_state(monkeypatch):
     assert completed_state.current_state == WorkflowState.COMPLETE
     assert completed_state.generated_ics
 
-    app.number_input[0].set_value(3).run(timeout=10)
-    app.button(key="start_planning").click().run(timeout=10)
+    submit_trip_chat(app, "Plan a 3 day Italy trip from NYC starting 2026-09-05, no dietary restrictions, relaxed pace, budget $4200.")
 
     new_state = app.session_state["travel_state"]
     assert new_state.current_state == WorkflowState.AWAITING_PREFERENCE_APPROVAL
     assert new_state.user_input["days"] == 3
+    assert new_state.user_input["destination"] == "Italy"
     assert new_state.approvals == {}
     assert new_state.generated_ics is None
     assert new_state.itinerary == []
@@ -155,7 +176,7 @@ def test_streamlit_app_calendar_export_error_is_shown_without_crashing(monkeypat
 
     app = AppTest.from_file("streamlit_app.py")
     app.run(timeout=10)
-    app.button(key="start_planning").click().run(timeout=10)
+    submit_trip_chat(app)
     for key in (
         "approve_preference_confirmation",
         "approve_destination_city_split",

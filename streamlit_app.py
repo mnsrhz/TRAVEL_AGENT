@@ -6,6 +6,7 @@ import streamlit as st
 from streamlit.errors import StreamlitSecretNotFoundError
 
 from src.agents.approval_agent import approve
+from src.agents.chat_intake_agent import ingest_user_message
 from src.config.settings import Settings
 from src.exports.itinerary_export import itinerary_to_markdown, trace_to_json_bytes
 from src.graph import nodes
@@ -35,6 +36,17 @@ def get_state() -> TravelState:
     if "travel_state" not in st.session_state:
         st.session_state.travel_state = TravelState()
     return st.session_state.travel_state
+
+
+def get_chat_history() -> list[dict[str, str]]:
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = [
+            {
+                "role": "assistant",
+                "content": "Tell me about the trip you want in plain English. I will ask for anything missing.",
+            }
+        ]
+    return st.session_state.chat_history
 
 
 def get_streamlit_secrets() -> dict[str, object]:
@@ -71,6 +83,41 @@ def reset_for_new_trip(state: TravelState, user_input: dict) -> None:
     state.trace_events = []
     state.errors = []
     state.generated_ics = None
+
+
+def reset_planning_outputs(state: TravelState) -> None:
+    state.user_input = {}
+    state.preferences = {}
+    state.destination_plan = {}
+    state.flights = []
+    state.hotels = []
+    state.attractions = []
+    state.restaurants = []
+    state.transit_estimates = []
+    state.itinerary = []
+    state.review = {}
+    state.approvals = {}
+    state.current_state = WorkflowState.COLLECTING_REQUIREMENTS
+    state.tool_call_count = 0
+    state.token_count = 0
+    state.review_iteration_count = 0
+    state.planner_iteration_count = 0
+    state.trace_events = []
+    state.errors = []
+    state.generated_ics = None
+
+
+def handle_chat_message(state: TravelState, settings: Settings, message: str) -> None:
+    history = get_chat_history()
+    history.append({"role": "user", "content": message})
+    if state.current_state != WorkflowState.COLLECTING_REQUIREMENTS:
+        reset_planning_outputs(state)
+    preferences, reply, ready = ingest_user_message(state.user_input, message, settings=settings)
+    state.user_input = preferences
+    history.append({"role": "assistant", "content": reply})
+    if ready:
+        reset_for_new_trip(state, preferences)
+        run_preference_step(state)
 
 
 def run_preference_step(state: TravelState) -> None:
@@ -165,6 +212,7 @@ def render_current_approval(state: TravelState, settings: Settings) -> None:
 
 settings = Settings.from_sources(os.environ, get_streamlit_secrets())
 state = get_state()
+chat_history = get_chat_history()
 
 left, center, right = st.columns([0.22, 0.52, 0.26], gap="small")
 
@@ -174,30 +222,13 @@ with left:
 
 with center:
     st.markdown(f"### {trip_heading(state)}")
-    with st.form("trip_form"):
-        destination = st.text_input("Destination", value=state.user_input.get("destination", "Japan"))
-        days = st.number_input("Vacation days", min_value=1, max_value=30, value=int(state.user_input.get("days", 10)))
-        origin = st.text_input("Origin city/airport", value=state.user_input.get("origin", "SFO"))
-        start_date = st.text_input("Start date", value=state.user_input.get("start_date", "2026-10-10"))
-        budget = st.number_input("Budget", min_value=0, value=int(state.user_input.get("budget", 3500)))
-        pace = st.selectbox("Pace", ["relaxed", "moderate", "packed"], index=1)
-        dietary = st.text_input("Dietary preference", value=state.user_input.get("dietary", "vegetarian"))
-        submitted = st.form_submit_button("Start planning", key="start_planning")
+    for message in chat_history:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
-    if submitted:
-        reset_for_new_trip(
-            state,
-            {
-                "destination": destination,
-                "days": days,
-                "origin": origin,
-                "start_date": start_date,
-                "budget": budget,
-                "pace": pace,
-                "dietary": dietary,
-            },
-        )
-        run_preference_step(state)
+    prompt = st.chat_input("Tell me what kind of trip you want", key="trip_chat_input")
+    if prompt:
+        handle_chat_message(state, settings, prompt)
         st.rerun()
 
     render_status(state)

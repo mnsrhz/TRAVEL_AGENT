@@ -20,6 +20,8 @@ ENV_FIELD_MAP = {
     "GOOGLE_MAPS_API_KEY": "google_maps_api_key",
 }
 
+DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
+
 
 def _parse_bool(value: str | None) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
@@ -45,6 +47,7 @@ class Settings:
     serpapi_api_key: str | None
     tavily_api_key: str | None
     google_maps_api_key: str | None
+    openai_model: str = DEFAULT_OPENAI_MODEL
     allow_demo_fallbacks: bool = False
 
     @classmethod
@@ -58,6 +61,7 @@ class Settings:
             serpapi_api_key=_lookup_setting(env, secrets, "SERPAPI_API_KEY"),
             tavily_api_key=_lookup_setting(env, secrets, "TAVILY_API_KEY"),
             google_maps_api_key=_lookup_setting(env, secrets, "GOOGLE_MAPS_API_KEY"),
+            openai_model=_lookup_setting(env, secrets, "OPENAI_MODEL") or DEFAULT_OPENAI_MODEL,
             allow_demo_fallbacks=_parse_bool(_lookup_setting(env, secrets, "ALLOW_DEMO_FALLBACKS")),
         )
 

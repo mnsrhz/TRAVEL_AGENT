@@ -52,3 +52,8 @@ def test_settings_can_read_streamlit_cloud_secrets():
     assert settings.openai_api_key == "openai"
     assert settings.missing_keys == []
     assert settings.allow_demo_fallbacks is True
+
+
+def test_settings_reads_optional_openai_model():
+    settings = Settings.from_sources({"OPENAI_MODEL": "gpt-custom"}, {})
+    assert settings.openai_model == "gpt-custom"
