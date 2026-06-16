@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 import html
 
 import streamlit as st
@@ -96,7 +97,7 @@ def render_tool_readiness(settings: Settings) -> None:
 
 
 def render_topbar(state: TravelState, settings: Settings) -> None:
-    trip = state.preferences or state.user_input
+    trip = _active_trip(state)
     destination = str(trip.get("destination", "New trip"))
     days = trip.get("days", "Tell me your dates")
     title = f"{days}-day {destination}" if destination != "New trip" else "Travel Concierge"
@@ -129,20 +130,45 @@ def render_main_content_end() -> None:
 
 
 def render_preferences(state: TravelState) -> None:
+    trip = _active_trip(state)
     items = [
-        ("Departure", state.preferences.get("origin")),
-        ("Dates", state.preferences.get("start_date")),
-        ("Pace", state.preferences.get("pace")),
-        ("Budget", f"${state.preferences.get('budget'):,}" if isinstance(state.preferences.get("budget"), int) else None),
-        ("Dietary", state.preferences.get("dietary")),
-        ("Destination", state.preferences.get("destination")),
+        ("Departure", "✈", trip.get("origin")),
+        ("Dates", "▦", _date_range_label(trip)),
+        ("Pace", "↝", _title_text(trip.get("pace"))),
+        ("Budget", "$", f"${trip.get('budget'):,}" if isinstance(trip.get("budget"), int) else None),
+        ("Dietary", "♧", _title_text(trip.get("dietary"))),
+        ("Destination", "⌖", trip.get("destination")),
     ]
-    st.markdown('<div><div class="tc-section-heading">Trip preferences</div><div class="tc-pref-grid">', unsafe_allow_html=True)
-    for label, value in items:
+    status = "Confirmed" if state.preferences else "Collecting"
+    st.markdown(
+        f"""
+        <div>
+          <div class="tc-section-title-row">
+            <div class="tc-section-heading">Trip preferences</div>
+            <span class="tc-mini-state">{html.escape(status)}</span>
+          </div>
+          <div class="tc-pref-grid">
+        """,
+        unsafe_allow_html=True,
+    )
+    rendered = 0
+    for label, icon, value in items:
         if value in {None, ""}:
             continue
+        rendered += 1
         st.markdown(
-            f'<div class="tc-pref-card"><div class="tc-pref-label">{html.escape(label)}</div><div class="tc-pref-val">{html.escape(str(value))}</div></div>',
+            f"""
+            <div class="tc-pref-card">
+              <div class="tc-pref-label">{html.escape(label)}</div>
+              <div class="tc-pref-val"><span class="tc-pref-icon">{html.escape(icon)}</span>{html.escape(str(value))}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    if not rendered:
+        st.markdown(
+            '<div class="tc-pref-card tc-pref-card-empty"><div class="tc-pref-label">Waiting</div>'
+            '<div class="tc-pref-val">Tell me about the trip you want</div></div>',
             unsafe_allow_html=True,
         )
     st.markdown("</div></div>", unsafe_allow_html=True)
@@ -321,6 +347,38 @@ def _city_summary(state: TravelState) -> str:
     if cities:
         return " · ".join(f"{city.get('city')} {city.get('nights')}d" for city in cities)
     return "Calendar-ready draft"
+
+
+def _active_trip(state: TravelState) -> dict:
+    return state.preferences or state.user_input
+
+
+def _title_text(value: object) -> str | None:
+    if value in {None, ""}:
+        return None
+    return str(value).title()
+
+
+def _date_range_label(trip: dict) -> str | None:
+    start_date = trip.get("start_date")
+    if not start_date:
+        return None
+    try:
+        start = datetime.fromisoformat(str(start_date)).date()
+    except ValueError:
+        return str(start_date)
+    days = trip.get("days")
+    if not isinstance(days, int) or days < 1:
+        return _format_display_date(start, include_year=True)
+    end = start + timedelta(days=days)
+    if start.year == end.year:
+        return f"{_format_display_date(start)} - {_format_display_date(end, include_year=True)}"
+    return f"{_format_display_date(start, include_year=True)} - {_format_display_date(end, include_year=True)}"
+
+
+def _format_display_date(value, *, include_year: bool = False) -> str:
+    formatted = value.strftime("%b %d, %Y" if include_year else "%b %d")
+    return formatted.replace(" 0", " ")
 
 
 def _dot_class(event_type: str) -> str:

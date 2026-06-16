@@ -27,8 +27,11 @@ def ingest_user_message(
     settings: Settings | None = None,
 ) -> tuple[dict[str, Any], str, bool]:
     preferences = dict(existing_preferences)
-    preferences.update(extract_preferences(message, settings=settings, existing_preferences=existing_preferences))
+    preferences.update(extract_preferences_locally(message))
     preferences.update(_extract_contextual_follow_up(existing_preferences, preferences, message))
+    if missing_required_fields(preferences) and settings and settings.openai_api_key:
+        preferences.update(extract_preferences(message, settings=settings, existing_preferences=existing_preferences))
+        preferences.update(_extract_contextual_follow_up(existing_preferences, preferences, message))
     missing = missing_required_fields(preferences)
     if missing:
         return preferences, FOLLOW_UP_QUESTIONS[missing[0]], False

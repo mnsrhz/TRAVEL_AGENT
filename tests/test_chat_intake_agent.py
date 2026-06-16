@@ -64,6 +64,31 @@ def test_chat_intake_uses_missing_field_context_for_short_origin_answer():
     assert reply.startswith("I have the essentials")
 
 
+def test_chat_intake_handles_contextual_follow_up_without_live_llm(monkeypatch):
+    def fail_live_call(settings, existing, message):
+        raise AssertionError("Live extraction should not be called for a contextual short answer")
+
+    monkeypatch.setattr("src.agents.chat_intake_agent._extract_preferences_with_openai", fail_live_call)
+    existing = {
+        "destination": "Japan",
+        "days": 10,
+        "start_date": "2026-10-10",
+        "budget": 3500,
+        "pace": "moderate",
+        "dietary": "vegetarian",
+    }
+
+    preferences, reply, ready = ingest_user_message(
+        existing,
+        "SFO",
+        Settings("openai-key", None, None, None),
+    )
+
+    assert ready is True
+    assert preferences["origin"] == "SFO"
+    assert reply.startswith("I have the essentials")
+
+
 def test_chat_intake_resolves_yearless_start_date_from_current_date(monkeypatch):
     monkeypatch.setattr("src.agents.chat_intake_agent._today", lambda: date(2026, 6, 16))
     existing = {

@@ -64,11 +64,16 @@ APP_CSS = """
 .tc-badge-green { background:var(--green-50); color:var(--green-800); }
 .tc-badge-amber { background:var(--amber-50); color:var(--amber-800); }
 .tc-main-content { padding:14px 16px; display:flex; flex-direction:column; gap:14px; }
+.tc-section-title-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px; }
 .tc-section-heading { font-size:10px; font-weight:500; color:var(--text-secondary); letter-spacing:.04em; text-transform:uppercase; margin-bottom:4px; }
+.tc-section-title-row .tc-section-heading { margin-bottom:0; }
+.tc-mini-state { font-size:10px; line-height:1; padding:3px 7px; border-radius:99px; color:var(--blue-800); background:var(--blue-50); border:0.5px solid rgba(24,95,165,0.16); }
 .tc-pref-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .tc-pref-card { background:var(--bg-secondary); border:0.5px solid var(--border-light); border-radius:var(--radius-md); padding:9px 11px; }
+.tc-pref-card-empty { grid-column:1 / -1; }
 .tc-pref-label { font-size:10px; color:var(--text-tertiary); margin-bottom:3px; }
-.tc-pref-val { font-size:12px; font-weight:500; color:var(--text-primary); }
+.tc-pref-val { font-size:12px; font-weight:500; color:var(--text-primary); display:flex; align-items:center; gap:4px; min-width:0; overflow-wrap:anywhere; }
+.tc-pref-icon { color:var(--text-secondary); font-size:12px; line-height:1; flex:0 0 auto; }
 .tc-card { border:0.5px solid var(--border-light); border-radius:var(--radius-md); background:var(--bg-secondary); padding:9px 11px; margin-bottom:8px; }
 .tc-value { font-size:12px; font-weight:500; color:var(--text-primary); }
 .tc-itinerary { border:0.5px solid var(--border-light); border-radius:var(--radius-lg); overflow:hidden; }

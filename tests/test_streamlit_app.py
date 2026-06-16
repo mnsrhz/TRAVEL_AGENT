@@ -140,6 +140,27 @@ def test_streamlit_app_accepts_short_origin_follow_up(monkeypatch):
     assert state.current_state == WorkflowState.AWAITING_PREFERENCE_APPROVAL
 
 
+def test_streamlit_app_shows_draft_preferences_during_chat_collection(monkeypatch):
+    for key in REQUIRED_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("ALLOW_DEMO_FALLBACKS", "true")
+
+    app = AppTest.from_file("streamlit_app.py")
+    app.run(timeout=10)
+    submit_trip_chat(
+        app,
+        "Plan a 10 day Japan trip starting 2026-10-10, vegetarian, moderate pace, budget $3500.",
+    )
+
+    markdown = "\n".join(item.value for item in app.markdown)
+    assert "Trip preferences" in markdown
+    assert "Japan" in markdown
+    assert "2026-10-10" in markdown
+    assert "$3,500" in markdown
+    assert "vegetarian" in markdown
+    assert "Where will you be traveling from?" in markdown
+
+
 def test_streamlit_app_exports_markdown_and_trace_before_calendar_ics(monkeypatch):
     for key in REQUIRED_ENV_KEYS:
         monkeypatch.delenv(key, raising=False)

@@ -219,6 +219,9 @@ def render_current_approval(state: TravelState, settings: Settings) -> None:
 settings = Settings.from_sources(os.environ, get_streamlit_secrets())
 state = get_state()
 chat_history = get_chat_history()
+prompt = st.chat_input("Tell me what kind of trip you want", key="trip_chat_input")
+if prompt:
+    handle_chat_message(state, settings, prompt)
 
 left, center, right = st.columns([0.22, 0.52, 0.26], gap="small")
 
@@ -233,14 +236,9 @@ with center:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    prompt = st.chat_input("Tell me what kind of trip you want", key="trip_chat_input")
-    if prompt:
-        handle_chat_message(state, settings, prompt)
-        st.rerun()
-
     render_status(state)
 
-    if state.preferences:
+    if state.preferences or state.user_input:
         render_preferences(state)
 
     render_destination_plan(state)
@@ -257,8 +255,8 @@ with center:
         st.download_button("Download calendar ICS", state.generated_ics, file_name="travel-itinerary.ics")
     if state.trace_events:
         st.download_button("Download trace JSON", trace_to_json_bytes(state), file_name="travel-trace.json")
-    render_main_content_end()
     render_bottom_chat_hint()
+    render_main_content_end()
 
 with right:
     render_trace_panel(state)
