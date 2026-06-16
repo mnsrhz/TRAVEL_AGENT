@@ -1,4 +1,7 @@
-from src.agents.chat_intake_agent import ingest_user_message, missing_required_fields
+from datetime import date
+
+from src.agents.chat_intake_agent import extract_preferences, ingest_user_message, missing_required_fields
+from src.config.settings import Settings
 
 
 def test_chat_intake_extracts_trip_details_from_plain_english():
@@ -59,3 +62,56 @@ def test_chat_intake_uses_missing_field_context_for_short_origin_answer():
     assert ready is True
     assert preferences["origin"] == "SFO"
     assert reply.startswith("I have the essentials")
+
+
+def test_chat_intake_resolves_yearless_start_date_from_current_date(monkeypatch):
+    monkeypatch.setattr("src.agents.chat_intake_agent._today", lambda: date(2026, 6, 16))
+    existing = {
+        "destination": "Japan",
+        "days": 10,
+        "origin": "SFO",
+        "budget": 3500,
+        "pace": "moderate",
+        "dietary": "vegetarian",
+    }
+
+    preferences, reply, ready = ingest_user_message(existing, "Sep 1st")
+
+    assert ready is True
+    assert preferences["start_date"] == "2026-09-01"
+    assert reply.startswith("I have the essentials")
+
+
+def test_chat_intake_rolls_past_yearless_dates_to_next_year(monkeypatch):
+    monkeypatch.setattr("src.agents.chat_intake_agent._today", lambda: date(2026, 9, 2))
+
+    preferences, _, ready = ingest_user_message(
+        {
+            "destination": "Japan",
+            "days": 10,
+            "origin": "SFO",
+            "budget": 3500,
+            "pace": "moderate",
+            "dietary": "vegetarian",
+        },
+        "Sep 1st",
+    )
+
+    assert ready is True
+    assert preferences["start_date"] == "2027-09-01"
+
+
+def test_chat_intake_prefers_current_date_local_parse_over_live_invented_year(monkeypatch):
+    monkeypatch.setattr("src.agents.chat_intake_agent._today", lambda: date(2026, 6, 16))
+    monkeypatch.setattr(
+        "src.agents.chat_intake_agent._extract_preferences_with_openai",
+        lambda settings, existing, message: {"start_date": "2023-09-01"},
+    )
+
+    preferences = extract_preferences(
+        "Sep 1st",
+        settings=Settings("openai-key", None, None, None),
+        existing_preferences={},
+    )
+
+    assert preferences["start_date"] == "2026-09-01"

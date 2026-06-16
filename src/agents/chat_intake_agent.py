@@ -3,7 +3,7 @@ from __future__ import annotations
 import calendar
 import json
 import re
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from src.agents.preference_agent import REQUIRED_FIELDS, missing_required_fields
@@ -41,11 +41,12 @@ def extract_preferences(
     settings: Settings | None = None,
     existing_preferences: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    local_preferences = extract_preferences_locally(message)
     if settings and settings.openai_api_key:
         live_preferences = _extract_preferences_with_openai(settings, existing_preferences or {}, message)
         if live_preferences:
-            return live_preferences
-    return extract_preferences_locally(message)
+            return {**live_preferences, **local_preferences}
+    return local_preferences
 
 
 def extract_preferences_locally(message: str) -> dict[str, Any]:
@@ -100,6 +101,7 @@ def _extract_preferences_with_openai(settings: Settings, existing_preferences: d
                         "Extract travel planning preferences from the user's message. "
                         "Return only JSON with any of these keys when present: "
                         f"{', '.join(REQUIRED_FIELDS)}. Use ISO YYYY-MM-DD for start_date, "
+                        f"today is {_today().isoformat()}, and dates without a year must use the next upcoming occurrence. "
                         "integer values for days and budget, and lowercase strings for pace and dietary. "
                         "Do not invent missing values."
                     ),
@@ -214,16 +216,25 @@ def _extract_start_date(text: str) -> str | None:
         return _format_date(iso.group(1), "%Y-%m-%d")
 
     month_names = "|".join(calendar.month_name[1:] + calendar.month_abbr[1:])
-    match = re.search(
+    explicit_year = re.search(
         rf"\b(?:start(?:ing)?|on)?\s*({month_names})\s+(\d{{1,2}})(?:st|nd|rd|th)?(?:,)?\s+(20\d{{2}})\b",
         text,
         flags=re.IGNORECASE,
     )
-    if not match:
-        return None
-    return _format_date(f"{match.group(1)} {match.group(2)} {match.group(3)}", "%B %d %Y") or _format_date(
-        f"{match.group(1)} {match.group(2)} {match.group(3)}", "%b %d %Y"
+    if explicit_year:
+        return _format_date(
+            f"{explicit_year.group(1)} {explicit_year.group(2)} {explicit_year.group(3)}",
+            "%B %d %Y",
+        ) or _format_date(f"{explicit_year.group(1)} {explicit_year.group(2)} {explicit_year.group(3)}", "%b %d %Y")
+
+    yearless = re.search(
+        rf"\b(?:start(?:ing)?|on)?\s*({month_names})\s+(\d{{1,2}})(?:st|nd|rd|th)?\b",
+        text,
+        flags=re.IGNORECASE,
     )
+    if not yearless:
+        return None
+    return _resolve_yearless_month_day(yearless.group(1), yearless.group(2))
 
 
 def _extract_budget(text: str) -> int | None:
@@ -258,3 +269,25 @@ def _format_date(value: str, date_format: str) -> str | None:
         return datetime.strptime(value, date_format).date().isoformat()
     except ValueError:
         return None
+
+
+def _resolve_yearless_month_day(month: str, day: str) -> str | None:
+    parsed = _parse_month_day(month, day, _today().year)
+    if not parsed:
+        return None
+    if parsed < _today():
+        parsed = _parse_month_day(month, day, _today().year + 1)
+    return parsed.isoformat() if parsed else None
+
+
+def _parse_month_day(month: str, day: str, year: int) -> date | None:
+    for date_format in ("%B %d %Y", "%b %d %Y"):
+        try:
+            return datetime.strptime(f"{month} {day} {year}", date_format).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _today() -> date:
+    return date.today()
