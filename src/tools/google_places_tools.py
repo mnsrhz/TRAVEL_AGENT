@@ -1,7 +1,15 @@
+from __future__ import annotations
+
+import requests
+
 from src.config.settings import Settings
 from src.state.travel_state import TravelState
 from src.tools import fallback_data
 from src.tools.policy import run_tool_with_policy
+
+
+PLACES_TEXT_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
+PLACES_FIELD_MASK = "places.id,places.displayName,places.formattedAddress,places.rating"
 
 
 def search_restaurants(state: TravelState, settings: Settings, query: dict) -> list[dict]:
@@ -17,19 +25,27 @@ def search_restaurants(state: TravelState, settings: Settings, query: dict) -> l
 
 
 def _search_places(settings: Settings, query: dict) -> list[dict]:
-    import googlemaps
-
-    client = googlemaps.Client(key=settings.google_maps_api_key)
     text = f"{query.get('dietary', '')} restaurants in {query.get('city')}"
-    response = client.places(query=text, type="restaurant")
+    response = requests.post(
+        PLACES_TEXT_SEARCH_URL,
+        headers={
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": settings.google_maps_api_key or "",
+            "X-Goog-FieldMask": PLACES_FIELD_MASK,
+        },
+        json={"textQuery": text, "includedType": "restaurant", "pageSize": 8},
+        timeout=20,
+    )
+    response.raise_for_status()
+    payload = response.json()
     return [
         {
-            "name": item.get("name"),
+            "name": item.get("displayName", {}).get("text"),
             "city": query.get("city"),
             "rating": item.get("rating"),
-            "address": item.get("formatted_address"),
-            "place_id": item.get("place_id"),
-            "source": "google_places",
+            "address": item.get("formattedAddress"),
+            "place_id": item.get("id"),
+            "source": "google_places_new",
         }
-        for item in response.get("results", [])[:8]
+        for item in payload.get("places", [])[:8]
     ]

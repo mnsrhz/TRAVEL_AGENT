@@ -4,7 +4,9 @@ from src.config.settings import Settings
 from src.state.travel_state import TravelState
 from src.tools.google_maps_tools import estimate_transit
 from src.tools.google_maps_tools import _extract_distance_matrix_result
+from src.tools.google_maps_tools import _estimate_google_transit
 from src.tools.google_places_tools import search_restaurants
+from src.tools.google_places_tools import _search_places
 from src.tools.policy import ToolExecutionError, run_tool_with_policy
 from src.tools.serpapi_tools import search_flights, search_hotels
 from src.tools.tavily_tools import search_attractions
@@ -130,3 +132,76 @@ def test_tool_adapters_return_fallback_data_when_enabled():
 def test_google_maps_parser_raises_clear_error_for_malformed_payload():
     with pytest.raises(RuntimeError, match="missing route duration"):
         _extract_distance_matrix_result({"rows": [{"elements": [{"status": "OK"}]}]}, {"origin": "A", "destination": "B"})
+
+
+def test_google_maps_uses_routes_api_v2(monkeypatch):
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return [{"condition": "ROUTE_EXISTS", "duration": "900s", "distanceMeters": 1200}]
+
+    def fake_post(url, *, headers, json, timeout):
+        calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        return Response()
+
+    monkeypatch.setattr("src.tools.google_maps_tools.requests.post", fake_post)
+
+    result = _estimate_google_transit(
+        Settings(None, None, None, "maps-key"),
+        {"origin": "Shinjuku", "destination": "Asakusa", "mode": "transit"},
+    )
+
+    assert calls[0]["url"] == "https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix"
+    assert calls[0]["headers"]["X-Goog-Api-Key"] == "maps-key"
+    assert "duration" in calls[0]["headers"]["X-Goog-FieldMask"]
+    assert calls[0]["json"]["origins"][0]["waypoint"]["address"] == "Shinjuku"
+    assert calls[0]["json"]["travelMode"] == "TRANSIT"
+    assert result[0]["duration_minutes"] == 15
+    assert result[0]["source"] == "google_routes"
+
+
+def test_google_places_uses_places_api_new_text_search(monkeypatch):
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "places": [
+                    {
+                        "id": "abc",
+                        "displayName": {"text": "Vegan Ramen"},
+                        "formattedAddress": "Tokyo",
+                        "rating": 4.7,
+                    }
+                ]
+            }
+
+    def fake_post(url, *, headers, json, timeout):
+        calls.append({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        return Response()
+
+    monkeypatch.setattr("src.tools.google_places_tools.requests.post", fake_post)
+
+    result = _search_places(Settings(None, None, None, "maps-key"), {"city": "Tokyo", "dietary": "vegetarian"})
+
+    assert calls[0]["url"] == "https://places.googleapis.com/v1/places:searchText"
+    assert calls[0]["headers"]["X-Goog-Api-Key"] == "maps-key"
+    assert "places.displayName" in calls[0]["headers"]["X-Goog-FieldMask"]
+    assert calls[0]["json"]["textQuery"] == "vegetarian restaurants in Tokyo"
+    assert result == [
+        {
+            "name": "Vegan Ramen",
+            "city": "Tokyo",
+            "rating": 4.7,
+            "address": "Tokyo",
+            "place_id": "abc",
+            "source": "google_places_new",
+        }
+    ]
