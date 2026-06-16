@@ -64,6 +64,47 @@ def test_chat_intake_uses_missing_field_context_for_short_origin_answer():
     assert reply.startswith("I have the essentials")
 
 
+def test_chat_intake_cleans_conversational_destination_follow_up():
+    existing = {
+        "days": 10,
+        "origin": "SFO",
+        "start_date": "2026-09-01",
+        "budget": 3500,
+        "pace": "moderate",
+        "dietary": "vegetarian",
+    }
+
+    preferences, reply, ready = ingest_user_message(existing, "and I want to go to Japan")
+
+    assert ready is True
+    assert preferences["destination"] == "Japan"
+    assert reply.startswith("I have the essentials")
+
+
+def test_chat_intake_ignores_destination_filler_from_live_extraction(monkeypatch):
+    monkeypatch.setattr(
+        "src.agents.chat_intake_agent._extract_preferences_with_openai",
+        lambda settings, existing, message: {"destination": "And I Want To"},
+    )
+
+    preferences, reply, ready = ingest_user_message(
+        {
+            "days": 10,
+            "origin": "SFO",
+            "start_date": "2026-09-01",
+            "budget": 3500,
+            "pace": "moderate",
+            "dietary": "vegetarian",
+        },
+        "and I want to go to Japan",
+        Settings("openai-key", None, None, None),
+    )
+
+    assert ready is True
+    assert preferences["destination"] == "Japan"
+    assert "And I Want To" not in preferences.values()
+
+
 def test_chat_intake_handles_contextual_follow_up_without_live_llm(monkeypatch):
     def fail_live_call(settings, existing, message):
         raise AssertionError("Live extraction should not be called for a contextual short answer")

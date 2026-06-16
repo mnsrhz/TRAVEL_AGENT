@@ -263,6 +263,13 @@ def _extract_dietary(text: str) -> str | None:
 
 
 def _clean_place(value: str) -> str:
+    value = re.sub(
+        r"^\s*(?:and\s+)?(?:i\s+)?(?:want|would\s+like|need|plan|hope)\s+to\s+(?:go\s+to|travel\s+to|visit|see)?\s*",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    )
+    value = re.sub(r"^\s*(?:go|travel)\s+to\s+", "", value, flags=re.IGNORECASE)
     value = re.sub(r"\b(trip|travel|vacation|holiday)\b", "", value, flags=re.IGNORECASE)
     return " ".join(value.strip(" ,.-").split()).title()
 

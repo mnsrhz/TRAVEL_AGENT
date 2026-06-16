@@ -161,6 +161,36 @@ def test_serpapi_hotels_includes_required_dates(monkeypatch):
     assert result == [{"name": "Tokyo Stay", "rate_per_night": {"lowest": "$180"}}]
 
 
+def test_serpapi_errors_do_not_expose_api_key(monkeypatch):
+    class Response:
+        status_code = 400
+        url = "https://serpapi.com/search.json?engine=google_flights&api_key=secret-key"
+        text = "arrival_id is invalid"
+
+        def raise_for_status(self):
+            raise requests.HTTPError("400 Client Error: Bad Request for url: " + self.url)
+
+        def json(self):
+            return {"error": "arrival_id is invalid"}
+
+    monkeypatch.setattr("src.tools.serpapi_tools.requests.get", lambda *args, **kwargs: Response())
+
+    state = TravelState()
+    settings = Settings(None, "secret-key", None, None, allow_demo_fallbacks=False)
+
+    with pytest.raises(ToolExecutionError) as exc:
+        search_flights(
+            state,
+            settings,
+            {"origin": "SFO", "destination": "And I Want To", "start_date": "2026-09-01"},
+        )
+
+    message = str(exc.value)
+    assert "secret-key" not in message
+    assert "api_key" not in message
+    assert "arrival_id is invalid" in message
+
+
 def test_google_maps_parser_raises_clear_error_for_malformed_payload():
     with pytest.raises(RuntimeError, match="missing route duration"):
         _extract_distance_matrix_result({"rows": [{"elements": [{"status": "OK"}]}]}, {"origin": "A", "destination": "B"})

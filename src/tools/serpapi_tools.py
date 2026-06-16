@@ -57,11 +57,30 @@ def _serpapi_search(settings: Settings, params: dict) -> list[dict]:
         params={**params, "api_key": settings.serpapi_api_key},
         timeout=20,
     )
-    response.raise_for_status()
+    _raise_for_serpapi_error(response, params["engine"])
     data = response.json()
     if params["engine"] == "google_flights":
         return data.get("best_flights") or data.get("other_flights") or []
     return data.get("properties") or []
+
+
+def _raise_for_serpapi_error(response: requests.Response, engine: str) -> None:
+    status_code = getattr(response, "status_code", None)
+    if status_code is not None and status_code < 400:
+        return
+    detail = _serpapi_error_detail(response)
+    if status_code is not None and status_code >= 400:
+        raise RuntimeError(f"SerpAPI {engine} returned HTTP {status_code}. {detail}".strip())
+    response.raise_for_status()
+
+
+def _serpapi_error_detail(response: requests.Response) -> str:
+    try:
+        payload = response.json()
+    except (AttributeError, ValueError):
+        payload = {}
+    detail = payload.get("error") or payload.get("message") or getattr(response, "text", "")
+    return str(detail).strip()
 
 
 def _hotel_date_params(query: dict) -> dict[str, str]:
