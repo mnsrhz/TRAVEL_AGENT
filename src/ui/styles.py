@@ -31,5 +31,6 @@ APP_CSS = """
 .tc-trace { border:0.5px solid var(--border-light); border-radius:8px; padding:9px 11px; margin-bottom:8px; background:#fff; }
 .tc-trace-title { font-size:11px; font-weight:700; }
 .tc-trace-body { font-size:11px; color:var(--text-secondary); line-height:1.45; }
+.tc-trace-meta { font-size:10px; color:var(--text-tertiary); line-height:1.4; margin-top:4px; }
 </style>
 """

@@ -8,14 +8,19 @@ from streamlit.errors import StreamlitSecretNotFoundError
 from src.agents.approval_agent import approve
 from src.config.settings import Settings
 from src.exports.itinerary_export import itinerary_to_markdown, trace_to_json_bytes
-from src.graph.travel_graph import run_demo_flow_until_calendar_ready
+from src.graph import nodes
+from src.observability.trace_logger import TraceLogger
 from src.state.travel_state import TravelState, WorkflowState
-from src.tools.calendar_tools import generate_ics
+from src.tools.calendar_tools import CalendarExportError, generate_ics
+from src.tools.policy import ToolExecutionError
 from src.ui.components import (
     render_approval_panel,
+    render_destination_plan,
     render_itinerary,
     render_preferences,
+    render_review_summary,
     render_status,
+    render_tool_readiness,
     render_trace_panel,
     render_workflow_sidebar,
 )
@@ -46,6 +51,118 @@ def trip_heading(state: TravelState) -> str:
     return f"{days}-day {destination} travel plan"
 
 
+def reset_for_new_trip(state: TravelState, user_input: dict) -> None:
+    state.user_input = user_input
+    state.preferences = {}
+    state.destination_plan = {}
+    state.flights = []
+    state.hotels = []
+    state.attractions = []
+    state.restaurants = []
+    state.transit_estimates = []
+    state.itinerary = []
+    state.review = {}
+    state.approvals = {}
+    state.current_state = WorkflowState.COLLECTING_REQUIREMENTS
+    state.tool_call_count = 0
+    state.token_count = 0
+    state.review_iteration_count = 0
+    state.planner_iteration_count = 0
+    state.trace_events = []
+    state.errors = []
+    state.generated_ics = None
+
+
+def run_preference_step(state: TravelState) -> None:
+    nodes.collect_preferences(state)
+
+
+def advance_approval_gate(state: TravelState, settings: Settings, gate: str) -> None:
+    approve(state, gate)
+    try:
+        if gate == "preference_confirmation":
+            nodes.research_options(state, settings)
+        elif gate == "destination_city_split":
+            nodes.build_itinerary(state)
+            nodes.review_plan(state)
+            if state.current_state == WorkflowState.AWAITING_ITINERARY_APPROVAL:
+                state.current_state = WorkflowState.AWAITING_HIGH_RISK_DAY_APPROVAL
+        elif gate == "high_risk_day":
+            state.current_state = WorkflowState.AWAITING_ITINERARY_APPROVAL
+        elif gate == "final_itinerary":
+            state.current_state = WorkflowState.AWAITING_CALENDAR_APPROVAL
+        elif gate == "calendar_creation":
+            generate_calendar(state)
+    except ToolExecutionError as exc:
+        state.errors.append(str(exc))
+
+
+def generate_calendar(state: TravelState) -> None:
+    state.current_state = WorkflowState.GENERATING_CALENDAR
+    try:
+        state.generated_ics = generate_ics(state.itinerary)
+    except CalendarExportError as exc:
+        state.generated_ics = None
+        state.current_state = WorkflowState.FAILED
+        state.errors.append(str(exc))
+        TraceLogger(state).log(
+            node="Calendar Export",
+            event_type="export_failed",
+            action="generate_ics",
+            input_summary="Approved itinerary",
+            output_summary="Calendar export failed",
+            status="error",
+            error=str(exc),
+        )
+        return
+    state.current_state = WorkflowState.COMPLETE
+
+
+APPROVAL_RENDER_CONFIG = {
+    WorkflowState.AWAITING_PREFERENCE_APPROVAL: (
+        "preference_confirmation",
+        "Approval gate 1 of 5 - Preference confirmation",
+        "Approve the normalized trip preferences before live research begins.",
+        "Approve preferences and research",
+    ),
+    WorkflowState.AWAITING_DESTINATION_APPROVAL: (
+        "destination_city_split",
+        "Approval gate 2 of 5 - Destination split",
+        "Approve the city split and research summary before building the itinerary.",
+        "Approve destination split",
+    ),
+    WorkflowState.AWAITING_HIGH_RISK_DAY_APPROVAL: (
+        "high_risk_day",
+        "Approval gate 3 of 5 - Safety review",
+        "Review the itinerary quality findings before continuing.",
+        "Approve safety review",
+    ),
+    WorkflowState.AWAITING_ITINERARY_APPROVAL: (
+        "final_itinerary",
+        "Approval gate 4 of 5 - Final itinerary",
+        "Approve the day-by-day plan before calendar creation is enabled.",
+        "Approve final itinerary",
+    ),
+    WorkflowState.AWAITING_CALENDAR_APPROVAL: (
+        "calendar_creation",
+        "Approval gate 5 of 5 - Calendar creation",
+        "Approve calendar creation to generate the ICS file.",
+        "Approve calendar and generate ICS",
+    ),
+}
+
+
+def render_current_approval(state: TravelState, settings: Settings) -> None:
+    config = APPROVAL_RENDER_CONFIG.get(state.current_state)
+    if not config:
+        return
+    gate, title, body, button_label = config
+    render_approval_panel(title, body)
+    if st.button(button_label, type="primary", key=f"approve_{gate}"):
+        advance_approval_gate(state, settings, gate)
+        st.rerun()
+
+
 settings = Settings.from_sources(os.environ, get_streamlit_secrets())
 state = get_state()
 
@@ -53,6 +170,7 @@ left, center, right = st.columns([0.22, 0.52, 0.26], gap="small")
 
 with left:
     render_workflow_sidebar(state, settings)
+    render_tool_readiness(settings)
 
 with center:
     st.markdown(f"### {trip_heading(state)}")
@@ -64,19 +182,22 @@ with center:
         budget = st.number_input("Budget", min_value=0, value=int(state.user_input.get("budget", 3500)))
         pace = st.selectbox("Pace", ["relaxed", "moderate", "packed"], index=1)
         dietary = st.text_input("Dietary preference", value=state.user_input.get("dietary", "vegetarian"))
-        submitted = st.form_submit_button("Start planning")
+        submitted = st.form_submit_button("Start planning", key="start_planning")
 
     if submitted:
-        state.user_input = {
-            "destination": destination,
-            "days": days,
-            "origin": origin,
-            "start_date": start_date,
-            "budget": budget,
-            "pace": pace,
-            "dietary": dietary,
-        }
-        run_demo_flow_until_calendar_ready(state, settings)
+        reset_for_new_trip(
+            state,
+            {
+                "destination": destination,
+                "days": days,
+                "origin": origin,
+                "start_date": start_date,
+                "budget": budget,
+                "pace": pace,
+                "dietary": dietary,
+            },
+        )
+        run_preference_step(state)
         st.rerun()
 
     render_status(state)
@@ -84,19 +205,19 @@ with center:
     if state.preferences:
         render_preferences(state)
 
+    render_destination_plan(state)
+
     if state.itinerary:
         render_itinerary(state)
-        render_approval_panel("Approval gate 5 of 5 - Calendar creation", "Approve calendar creation to generate the ICS file.")
-        if st.button("Approve calendar and generate ICS", type="primary"):
-            approve(state, "calendar_creation")
-            state.current_state = WorkflowState.GENERATING_CALENDAR
-            state.generated_ics = generate_ics(state.itinerary)
-            state.current_state = WorkflowState.COMPLETE
-            st.rerun()
+        render_review_summary(state)
 
-    if state.generated_ics:
+    render_current_approval(state, settings)
+
+    if state.itinerary:
         st.download_button("Download itinerary markdown", itinerary_to_markdown(state.itinerary), file_name="travel-itinerary.md")
+    if state.generated_ics:
         st.download_button("Download calendar ICS", state.generated_ics, file_name="travel-itinerary.ics")
+    if state.trace_events:
         st.download_button("Download trace JSON", trace_to_json_bytes(state), file_name="travel-trace.json")
 
 with right:

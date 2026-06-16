@@ -37,6 +37,23 @@ def render_workflow_sidebar(state: TravelState, settings: Settings) -> None:
     st.metric("Estimated tokens", state.token_count, help="Pause at 95,000 of 100,000")
 
 
+def render_tool_readiness(settings: Settings) -> None:
+    st.markdown('<div class="tc-label">Tool readiness</div>', unsafe_allow_html=True)
+    tools = [
+        ("OpenAI", "OPENAI_API_KEY"),
+        ("SerpAPI", "SERPAPI_API_KEY"),
+        ("Tavily", "TAVILY_API_KEY"),
+        ("Google Maps", "GOOGLE_MAPS_API_KEY"),
+    ]
+    for label, key in tools:
+        status = "Live key set" if settings.has_key(key) else "Fallback allowed" if settings.allow_demo_fallbacks else "Missing key"
+        badge = "tc-badge-green" if settings.has_key(key) else "tc-badge-blue" if settings.allow_demo_fallbacks else "tc-badge-amber"
+        st.markdown(
+            f'<div class="tc-card"><span class="tc-badge {badge}">{html.escape(status)}</span><div class="tc-value">{html.escape(label)}</div></div>',
+            unsafe_allow_html=True,
+        )
+
+
 def render_preferences(state: TravelState) -> None:
     st.markdown('<div class="tc-label">Trip preferences</div>', unsafe_allow_html=True)
     cols = st.columns(2)
@@ -59,20 +76,52 @@ def render_status(state: TravelState) -> None:
 def render_itinerary(state: TravelState) -> None:
     st.markdown('<div class="tc-label">Draft itinerary</div>', unsafe_allow_html=True)
     for day in state.itinerary:
-        st.markdown(f"**Day {day['day']} - {day['date']} · {day.get('city', '')}**")
+        st.markdown(f"**Day {day.get('day', '?')} - {day.get('date', 'Date TBD')} · {day.get('city', '')}**")
         for event in day.get("events", []):
+            start = str(event.get("start", "TBD"))
+            end = str(event.get("end", "TBD"))
+            start_label = start[11:16] if len(start) >= 16 else start
+            end_label = end[11:16] if len(end) >= 16 else end
             st.markdown(
                 f"""
                 <div class="tc-event">
-                  <div class="tc-time">{html.escape(event['start'][11:16])} - {html.escape(event['end'][11:16])}</div>
+                  <div class="tc-time">{html.escape(start_label)} - {html.escape(end_label)}</div>
                   <div>
-                    <div class="tc-event-title">{html.escape(event['title'])}</div>
+                    <div class="tc-event-title">{html.escape(str(event.get('title', 'Untitled event')))}</div>
                     <div class="tc-event-sub">{html.escape(event.get('location', ''))}</div>
                   </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
+
+
+def render_destination_plan(state: TravelState) -> None:
+    if not state.destination_plan:
+        return
+    st.markdown('<div class="tc-label">Destination split</div>', unsafe_allow_html=True)
+    for city in state.destination_plan.get("cities", []):
+        st.markdown(
+            f'<div class="tc-card"><div class="tc-value">{html.escape(str(city.get("city", "")))}</div>'
+            f'<div class="tc-label">{html.escape(str(city.get("nights", "")))} nights</div></div>',
+            unsafe_allow_html=True,
+        )
+
+
+def render_review_summary(state: TravelState) -> None:
+    if not state.review:
+        return
+    findings = state.review.get("findings", [])
+    st.markdown(
+        f"""
+        <div class="tc-card">
+          <div class="tc-label">Review score</div>
+          <div class="tc-value">{html.escape(str(state.review.get("score", "n/a")))} / 10</div>
+          <div class="tc-event-sub">{html.escape("; ".join(str(item) for item in findings))}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_approval_panel(title: str, body: str) -> None:
@@ -101,11 +150,22 @@ def render_trace_panel(state: TravelState) -> None:
         )
         return
     for event in reversed(state.trace_events[-8:]):
+        details = [
+            f"tokens {event.tokens_used}",
+            f"tools {event.tool_calls_used}",
+        ]
+        if event.loop_count or event.max_loop_count:
+            details.append(f"loop {event.loop_count}/{event.max_loop_count}")
+        if event.decision:
+            details.append(f"decision {event.decision}")
+        if event.error:
+            details.append(f"error {event.error}")
         st.markdown(
             f"""
             <div class="tc-trace">
               <div class="tc-trace-title">Step {event.step} · {html.escape(event.node)} · {html.escape(event.status)}</div>
               <div class="tc-trace-body">{html.escape(event.output_summary)}</div>
+              <div class="tc-trace-meta">{html.escape(" · ".join(details))}</div>
             </div>
             """,
             unsafe_allow_html=True,
