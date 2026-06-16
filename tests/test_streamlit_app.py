@@ -57,6 +57,8 @@ def test_streamlit_app_renders_html_sample_shell(monkeypatch):
     assert "tc-tool-row" in markdown
     assert "tc-topbar" in markdown
     assert "tc-bottom-chat" in markdown
+    assert "tc-chat-loading" in markdown
+    assert "tc-chat-spinner" in markdown
     assert "tc-reasoning-wrapper" in markdown
 
 

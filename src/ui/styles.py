@@ -107,6 +107,9 @@ APP_CSS = """
 .stChatInput { background:var(--bg-primary); border-top:0.5px solid var(--border-light); padding:10px 14px; }
 .stChatInput textarea { border:0.5px solid var(--border-mid) !important; border-radius:var(--radius-md) !important; font-size:12px !important; }
 .stChatMessage { background:transparent; padding:2px 0; }
+.tc-chat-loading { display:inline-flex; align-items:center; gap:8px; padding:7px 10px; border:0.5px solid var(--border-light); border-radius:var(--radius-md); background:var(--bg-secondary); color:var(--text-secondary); font-size:12px; }
+.tc-chat-spinner { width:12px; height:12px; border-radius:50%; border:2px solid var(--blue-50); border-top-color:var(--blue-600); animation:tc-spin .8s linear infinite; flex:0 0 auto; }
+@keyframes tc-spin { to { transform:rotate(360deg); } }
 .tc-reasoning-wrapper { min-height:740px; display:flex; flex-direction:column; background:var(--bg-secondary); }
 .tc-reasoning-topbar { padding:12px 14px; border-bottom:0.5px solid var(--border-light); display:flex; align-items:center; justify-content:space-between; }
 .tc-reasoning-title { font-size:12px; font-weight:500; display:flex; align-items:center; gap:6px; }

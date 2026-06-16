@@ -267,6 +267,18 @@ def render_bottom_chat_hint() -> None:
     st.markdown('<div class="tc-bottom-chat">Ask a question or give feedback below.</div>', unsafe_allow_html=True)
 
 
+def render_chat_loading() -> None:
+    st.markdown(
+        """
+        <div class="tc-chat-loading" role="status" aria-live="polite">
+          <span class="tc-chat-spinner" aria-hidden="true"></span>
+          <span>Working on that…</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_trace_panel(state: TravelState) -> None:
     st.markdown(
         """
