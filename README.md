@@ -1,8 +1,8 @@
 # Travel Concierge Agent
 
-A Streamlit-hosted Travel Concierge Agent for planning multi-city trips with approval gates, live travel research adapters, demo fallback data, itinerary export, calendar export, and an agent trace console.
+A Travel Concierge Agent for planning multi-city trips with approval gates, live travel research adapters, demo fallback data, itinerary export, calendar export, and an agent trace console.
 
-The first release follows the approved design direction: polished Streamlit UI, modular agent/tool code, five approval gates from the requirements document, and a single fallback flag that controls whether missing or failed live APIs may use demo data.
+The current app direction is a React/Next.js frontend hosted on Vercel with a FastAPI backend hosted on Render. The Streamlit app remains in the repo as a legacy/local reference path, but the production UI now follows the interactive HTML blueprint more closely: eight workflow screens, tool activity states, approval gates, chat-first intake, and a reasoning trace panel.
 
 ## What It Does
 
@@ -14,6 +14,13 @@ The first release follows the approved design direction: polished Streamlit UI, 
 - Generates downloadable Markdown, ICS calendar, and trace JSON files.
 - Shows workflow status, tool-call counts, token estimates, and recent agent reasoning.
 
+## Architecture
+
+- `frontend/`: Next.js app for Vercel. It renders the approved interactive UI blueprint and calls the backend API.
+- `backend/`: FastAPI service for Render. It exposes session, chat, approval, and export endpoints.
+- `src/`: shared agent, tool, state, export, and workflow logic.
+- `streamlit_app.py`: legacy Streamlit entrypoint retained for local comparison.
+
 ## Live Vs Fallback Mode
 
 `ALLOW_DEMO_FALLBACKS` is the release switch:
@@ -23,7 +30,65 @@ The first release follows the approved design direction: polished Streamlit UI, 
 
 For demos, set `ALLOW_DEMO_FALLBACKS=true`. For production validation, omit it or set it to `false`.
 
-## Local Setup
+## Local Setup - React + FastAPI
+
+Start the backend:
+
+```bash
+.venv/bin/pip install -r backend/requirements.txt
+cd backend
+uvicorn app.main:app --reload --port 8000
+```
+
+Start the frontend in another terminal:
+
+```bash
+cd frontend
+npm install
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 npm run dev
+```
+
+Open `http://localhost:3000`.
+
+## Render Backend Deployment
+
+Create a Render Web Service from this GitHub repo:
+
+- Root directory: `backend`
+- Build command: `pip install -r requirements.txt`
+- Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+
+Set these Render environment variables:
+
+```text
+OPENAI_API_KEY=...
+SERPAPI_API_KEY=...
+TAVILY_API_KEY=...
+GOOGLE_MAPS_API_KEY=...
+OPENAI_MODEL=gpt-4o-mini
+ALLOW_DEMO_FALLBACKS=true
+FRONTEND_ORIGIN=https://your-vercel-app.vercel.app
+```
+
+For strict live mode, set `ALLOW_DEMO_FALLBACKS=false`.
+
+## Vercel Frontend Deployment
+
+Create a Vercel project from this GitHub repo:
+
+- Framework preset: Next.js
+- Root directory: `frontend`
+- Build command: `npm run build`
+
+Set this Vercel environment variable:
+
+```text
+NEXT_PUBLIC_API_BASE_URL=https://your-render-service.onrender.com
+```
+
+After Vercel gives you the public URL, update Render's `FRONTEND_ORIGIN` to match it.
+
+## Legacy Streamlit Setup
 
 ```bash
 python3 -m venv .venv
@@ -34,7 +99,7 @@ cp .env.example .env
 
 Streamlit reads secrets from environment variables or `st.secrets`. If you use a local `.env`, export the variables before starting Streamlit or set them in `.streamlit/secrets.toml`.
 
-## Streamlit Cloud Deployment
+## Legacy Streamlit Cloud Deployment
 
 1. Push this repository to GitHub.
 2. In Streamlit Cloud, create a new app from the repo.
@@ -61,6 +126,8 @@ ALLOW_DEMO_FALLBACKS = "true"
 ## Verification
 
 ```bash
+.venv/bin/pytest tests/test_backend_api.py -q
+cd frontend && npm run build
 .venv/bin/pytest -q
 env PYTHONPYCACHEPREFIX=/private/tmp/travel-agent-pycache .venv/bin/python -m py_compile streamlit_app.py src/ui/styles.py src/ui/components.py src/config/settings.py
 ```

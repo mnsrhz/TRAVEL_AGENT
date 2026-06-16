@@ -31,7 +31,14 @@ def build_demo_itinerary(preferences: dict) -> list[dict]:
     itinerary = []
     for index, city in enumerate(city_by_day):
         day = start_date + timedelta(days=index)
-        names = highlights[city]
+        names = highlights.get(
+            city,
+            [
+                f"{city} landmark walk",
+                f"{city} local market",
+                f"{city} cultural district",
+            ],
+        )
         itinerary.append(
             {
                 "day": index + 1,

@@ -7,3 +7,6 @@ __pycache__/
 .superpowers/
 .worktrees/
 *.pyc
+frontend/.next/
+frontend/node_modules/
+backend/data/sessions/
