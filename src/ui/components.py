@@ -8,61 +8,144 @@ from src.config.settings import Settings
 from src.state.travel_state import TravelState, WorkflowState
 
 
+WORKFLOW_STEPS = [
+    ("Collect preferences", WorkflowState.COLLECTING_REQUIREMENTS),
+    ("Research options", WorkflowState.RESEARCHING),
+    ("Build itinerary", WorkflowState.BUILDING_ITINERARY),
+    ("Review & critique", WorkflowState.REVIEWING),
+    ("Approval gate", WorkflowState.AWAITING_PREFERENCE_APPROVAL),
+    ("Generate calendar", WorkflowState.GENERATING_CALENDAR),
+    ("Export ICS file", WorkflowState.COMPLETE),
+]
+
+
+def render_shell_marker() -> None:
+    st.markdown('<div class="tc-app-shell" aria-hidden="true"></div>', unsafe_allow_html=True)
+
+
+def render_workflow_sidebar(state: TravelState, settings: Settings) -> None:
+    st.markdown(
+        """
+        <div class="tc-logo">
+          <div class="tc-logo-icon">✈</div>
+          <div>
+            <div class="tc-logo-text">Travel Concierge</div>
+            <div class="tc-logo-sub">Agentic AI system</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    render_environment(settings)
+    st.markdown('<div class="tc-sec-label">Workflow</div><div class="tc-step-list">', unsafe_allow_html=True)
+    active_index = _active_step_index(state)
+    for index, (label, _) in enumerate(WORKFLOW_STEPS, start=1):
+        status = "done" if index < active_index else "active" if index == active_index else "pending"
+        dot = "✓" if status == "done" else str(index)
+        st.markdown(
+            f"""
+            <div class="tc-step {status}">
+              <div class="tc-step-dot {status}">{html.escape(dot)}</div>
+              <span class="tc-step-name">{html.escape(label)}</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
 def render_environment(settings: Settings) -> None:
     badge = "tc-badge-green" if settings.allow_demo_fallbacks else "tc-badge-amber"
-    st.markdown(f'<span class="tc-badge {badge}">{settings.mode_label}</span>', unsafe_allow_html=True)
+    st.markdown(f'<span class="tc-badge {badge}">{html.escape(settings.mode_label)}</span>', unsafe_allow_html=True)
     if settings.missing_keys:
         st.caption("Missing keys: " + ", ".join(settings.missing_keys))
 
 
-def render_workflow_sidebar(state: TravelState, settings: Settings) -> None:
-    st.markdown("### Travel Concierge")
-    st.caption("Agentic AI system")
-    render_environment(settings)
-    st.markdown('<div class="tc-label">Workflow</div>', unsafe_allow_html=True)
-    gates = [
-        ("Preference confirmation", "preference_confirmation"),
-        ("Destination split", "destination_city_split"),
-        ("High-risk day", "high_risk_day"),
-        ("Final itinerary", "final_itinerary"),
-        ("Calendar creation", "calendar_creation"),
-    ]
-    for label, key in gates:
-        status = "Done" if state.approvals.get(key) else "Pending"
-        st.markdown(
-            f'<div class="tc-card"><div class="tc-value">{html.escape(label)}</div><div class="tc-label">{status}</div></div>',
-            unsafe_allow_html=True,
-        )
-    st.metric("Tool calls", state.tool_call_count, help="Maximum 25 per session")
-    st.metric("Estimated tokens", state.token_count, help="Pause at 95,000 of 100,000")
-
-
 def render_tool_readiness(settings: Settings) -> None:
-    st.markdown('<div class="tc-label">Tool readiness</div>', unsafe_allow_html=True)
+    st.markdown('<div class="tc-sec-label">Tool activity</div>', unsafe_allow_html=True)
     tools = [
-        ("OpenAI", "OPENAI_API_KEY"),
-        ("SerpAPI", "SERPAPI_API_KEY"),
-        ("Tavily", "TAVILY_API_KEY"),
-        ("Google Maps", "GOOGLE_MAPS_API_KEY"),
+        ("◎", "Tavily search", "TAVILY_API_KEY"),
+        ("✈", "SerpAPI flights", "SERPAPI_API_KEY"),
+        ("▣", "SerpAPI hotels", "SERPAPI_API_KEY"),
+        ("⌖", "Google Places", "GOOGLE_MAPS_API_KEY"),
+        ("↝", "Google Maps", "GOOGLE_MAPS_API_KEY"),
     ]
-    for label, key in tools:
-        status = "Live key set" if settings.has_key(key) else "Fallback allowed" if settings.allow_demo_fallbacks else "Missing key"
-        badge = "tc-badge-green" if settings.has_key(key) else "tc-badge-blue" if settings.allow_demo_fallbacks else "tc-badge-amber"
+    for icon, label, key in tools:
+        status, status_class = _tool_status(settings, key)
         st.markdown(
-            f'<div class="tc-card"><span class="tc-badge {badge}">{html.escape(status)}</span><div class="tc-value">{html.escape(label)}</div></div>',
+            f"""
+            <div class="tc-tool-row">
+              <span class="tc-tool-icon">{html.escape(icon)}</span>
+              <span class="tc-tool-name">{html.escape(label)}</span>
+              <span class="{status_class}">{html.escape(status)}</span>
+            </div>
+            """,
             unsafe_allow_html=True,
         )
+    usage = min(100, int((settings.allow_demo_fallbacks or 0) * 8))
+    st.markdown(
+        f"""
+        <div class="tc-token-block">
+          <div class="tc-sec-label">Token usage</div>
+          <div class="tc-token-bar-bg"><div class="tc-token-bar-fill" style="width:{usage}%;"></div></div>
+          <div class="tc-token-nums"><span>0 used</span><span>100k max</span></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_topbar(state: TravelState, settings: Settings) -> None:
+    trip = state.preferences or state.user_input
+    destination = str(trip.get("destination", "New trip"))
+    days = trip.get("days", "Tell me your dates")
+    title = f"{days}-day {destination}" if destination != "New trip" else "Travel Concierge"
+    pace = str(trip.get("pace", "Chat intake")).title()
+    budget = f"${trip.get('budget'):,}" if isinstance(trip.get("budget"), int) else "Budget pending"
+    dietary = str(trip.get("dietary", "Dietary pending")).title()
+    mode_class = "tc-badge-green" if settings.allow_demo_fallbacks else "tc-badge-amber"
+    st.markdown(
+        f"""
+        <div class="tc-topbar">
+          <span class="tc-topbar-title">{html.escape(title)}</span>
+          <div class="tc-topbar-meta">
+            <span class="tc-badge tc-badge-blue">{html.escape(pace)}</span>
+            <span class="tc-badge tc-badge-green">{html.escape(budget)}</span>
+            <span class="tc-badge tc-badge-amber">{html.escape(dietary)}</span>
+            <span class="tc-badge {mode_class}">{html.escape(settings.mode_label)}</span>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_main_content_start() -> None:
+    st.markdown('<div class="tc-main-content">', unsafe_allow_html=True)
+
+
+def render_main_content_end() -> None:
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_preferences(state: TravelState) -> None:
-    st.markdown('<div class="tc-label">Trip preferences</div>', unsafe_allow_html=True)
-    cols = st.columns(2)
-    for index, (label, value) in enumerate(state.preferences.items()):
-        with cols[index % 2]:
-            st.markdown(
-                f'<div class="tc-card"><div class="tc-label">{html.escape(label)}</div><div class="tc-value">{html.escape(str(value))}</div></div>',
-                unsafe_allow_html=True,
-            )
+    items = [
+        ("Departure", state.preferences.get("origin")),
+        ("Dates", state.preferences.get("start_date")),
+        ("Pace", state.preferences.get("pace")),
+        ("Budget", f"${state.preferences.get('budget'):,}" if isinstance(state.preferences.get("budget"), int) else None),
+        ("Dietary", state.preferences.get("dietary")),
+        ("Destination", state.preferences.get("destination")),
+    ]
+    st.markdown('<div><div class="tc-section-heading">Trip preferences</div><div class="tc-pref-grid">', unsafe_allow_html=True)
+    for label, value in items:
+        if value in {None, ""}:
+            continue
+        st.markdown(
+            f'<div class="tc-pref-card"><div class="tc-pref-label">{html.escape(label)}</div><div class="tc-pref-val">{html.escape(str(value))}</div></div>',
+            unsafe_allow_html=True,
+        )
+    st.markdown("</div></div>", unsafe_allow_html=True)
 
 
 def render_status(state: TravelState) -> None:
@@ -74,38 +157,49 @@ def render_status(state: TravelState) -> None:
 
 
 def render_itinerary(state: TravelState) -> None:
-    st.markdown('<div class="tc-label">Draft itinerary</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div><div class="tc-section-heading">Draft itinerary</div><div class="tc-itinerary">'
+        '<div class="tc-itin-header"><span class="tc-itin-header-left">Day-by-day schedule</span>'
+        f'<span class="tc-itin-header-right">{html.escape(_city_summary(state))}</span></div>',
+        unsafe_allow_html=True,
+    )
     for day in state.itinerary:
-        st.markdown(f"**Day {day.get('day', '?')} - {day.get('date', 'Date TBD')} · {day.get('city', '')}**")
+        st.markdown(
+            f'<div class="tc-day-label">Day {html.escape(str(day.get("day", "?")))} — {html.escape(str(day.get("date", "Date TBD")))} · {html.escape(str(day.get("city", "")))}</div>',
+            unsafe_allow_html=True,
+        )
         for event in day.get("events", []):
-            start = str(event.get("start", "TBD"))
-            end = str(event.get("end", "TBD"))
+            event_type = str(event.get("type", "event"))
+            start = str(event.get("start", ""))
             start_label = start[11:16] if len(start) >= 16 else start
-            end_label = end[11:16] if len(end) >= 16 else end
             st.markdown(
                 f"""
-                <div class="tc-event">
-                  <div class="tc-time">{html.escape(start_label)} - {html.escape(end_label)}</div>
+                <div class="tc-event-row">
+                  <span class="tc-event-time">{html.escape(start_label)}</span>
+                  <div class="tc-event-dot {_dot_class(event_type)}"></div>
                   <div>
                     <div class="tc-event-title">{html.escape(str(event.get('title', 'Untitled event')))}</div>
-                    <div class="tc-event-sub">{html.escape(event.get('location', ''))}</div>
+                    <div class="tc-event-sub">{html.escape(str(event.get('location', event.get('description', ''))))}</div>
+                    <span class="tc-event-tag {_tag_class(event_type)}">{html.escape(event_type.title())}</span>
                   </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
+    st.markdown("</div></div>", unsafe_allow_html=True)
 
 
 def render_destination_plan(state: TravelState) -> None:
     if not state.destination_plan:
         return
-    st.markdown('<div class="tc-label">Destination split</div>', unsafe_allow_html=True)
+    st.markdown('<div><div class="tc-section-heading">Destination split</div><div class="tc-pref-grid">', unsafe_allow_html=True)
     for city in state.destination_plan.get("cities", []):
         st.markdown(
-            f'<div class="tc-card"><div class="tc-value">{html.escape(str(city.get("city", "")))}</div>'
-            f'<div class="tc-label">{html.escape(str(city.get("nights", "")))} nights</div></div>',
+            f'<div class="tc-pref-card"><div class="tc-pref-label">{html.escape(str(city.get("nights", "")))} nights</div>'
+            f'<div class="tc-pref-val">{html.escape(str(city.get("city", "")))}</div></div>',
             unsafe_allow_html=True,
         )
+    st.markdown("</div></div>", unsafe_allow_html=True)
 
 
 def render_review_summary(state: TravelState) -> None:
@@ -115,8 +209,8 @@ def render_review_summary(state: TravelState) -> None:
     st.markdown(
         f"""
         <div class="tc-card">
-          <div class="tc-label">Review score</div>
-          <div class="tc-value">{html.escape(str(state.review.get("score", "n/a")))} / 10</div>
+          <div class="tc-pref-label">Review score</div>
+          <div class="tc-pref-val">{html.escape(str(state.review.get("score", "n/a")))} / 10</div>
           <div class="tc-event-sub">{html.escape("; ".join(str(item) for item in findings))}</div>
         </div>
         """,
@@ -128,45 +222,136 @@ def render_approval_panel(title: str, body: str) -> None:
     st.markdown(
         f"""
         <div class="tc-approval">
-          <div class="tc-approval-head">{html.escape(title)}</div>
-          <div class="tc-approval-body">{html.escape(body)}</div>
+          <div class="tc-approval-head">⚠ {html.escape(title)}</div>
+          <div class="tc-approval-body">
+            <p>{html.escape(body)}</p>
+            <div class="tc-approval-actions">
+              <span class="tc-faux-btn primary">✓ Approve</span>
+              <span class="tc-faux-btn">✎ Modify</span>
+              <span class="tc-faux-btn danger">↻ Regenerate</span>
+            </div>
+          </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
 
+def render_bottom_chat_hint() -> None:
+    st.markdown('<div class="tc-bottom-chat">Ask a question or give feedback below.</div>', unsafe_allow_html=True)
+
+
 def render_trace_panel(state: TravelState) -> None:
-    st.markdown("### Agent reasoning")
-    if not state.trace_events:
-        st.markdown(
-            """
-            <div class="tc-trace">
-              <div class="tc-trace-title">Ready</div>
-              <div class="tc-trace-body">Start planning to see the agent trace, tool calls, loop counts, and approval decisions.</div>
+    st.markdown(
+        """
+        <div class="tc-reasoning-wrapper">
+          <div class="tc-reasoning-topbar">
+            <div class="tc-reasoning-title">🧠 Agent reasoning</div>
+            <div class="tc-reasoning-filter">
+              <span class="tc-filter-pill active">All</span>
+              <span class="tc-filter-pill">Plan</span>
+              <span class="tc-filter-pill">Tool</span>
+              <span class="tc-filter-pill">Critique</span>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        return
-    for event in reversed(state.trace_events[-8:]):
-        details = [
-            f"tokens {event.tokens_used}",
-            f"tools {event.tool_calls_used}",
-        ]
-        if event.loop_count or event.max_loop_count:
-            details.append(f"loop {event.loop_count}/{event.max_loop_count}")
-        if event.decision:
-            details.append(f"decision {event.decision}")
+          </div>
+          <div class="tc-reasoning-body">
+        """,
+        unsafe_allow_html=True,
+    )
+    events = state.trace_events[-8:] or []
+    if not events:
+        _render_thought_card("Plan", "Ready", "Step 0", "Tell me the trip you want. I will collect missing details and show each agent step here.", "plan")
+    for event in reversed(events):
+        card_type = _event_card_type(event.event_type, event.status)
+        meta = f"Step {event.step} · tokens {event.tokens_used} · tools {event.tool_calls_used}"
+        body = event.output_summary
         if event.error:
-            details.append(f"error {event.error}")
-        st.markdown(
-            f"""
-            <div class="tc-trace">
-              <div class="tc-trace-title">Step {event.step} · {html.escape(event.node)} · {html.escape(event.status)}</div>
-              <div class="tc-trace-body">{html.escape(event.output_summary)}</div>
-              <div class="tc-trace-meta">{html.escape(" · ".join(details))}</div>
+            body = f"{body}. {event.error}"
+        _render_thought_card(card_type.title(), event.node, meta, body, card_type)
+    st.markdown("</div></div>", unsafe_allow_html=True)
+
+
+def _render_thought_card(card_type: str, title: str, meta: str, body: str, class_name: str) -> None:
+    st.markdown(
+        f"""
+        <div class="tc-thought-card">
+          <div class="tc-thought-header">
+            <div class="tc-thought-icon tc-icon-{html.escape(class_name)}">{_thought_icon(class_name)}</div>
+            <div class="tc-thought-meta">
+              <div class="tc-thought-title">{html.escape(title)}</div>
+              <div class="tc-thought-time">{html.escape(meta)}</div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            <span class="tc-thought-type tc-type-{html.escape(class_name)}">{html.escape(card_type)}</span>
+          </div>
+          <div class="tc-thought-body">
+            <div class="tc-thought-text">{html.escape(body)}</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _active_step_index(state: TravelState) -> int:
+    if state.current_state == WorkflowState.COMPLETE:
+        return 7
+    if state.current_state == WorkflowState.GENERATING_CALENDAR:
+        return 6
+    if state.current_state.name.startswith("AWAITING"):
+        return 5
+    if state.current_state == WorkflowState.REVIEWING:
+        return 4
+    if state.current_state == WorkflowState.BUILDING_ITINERARY:
+        return 3
+    if state.current_state == WorkflowState.RESEARCHING:
+        return 2
+    return 1
+
+
+def _tool_status(settings: Settings, key: str) -> tuple[str, str]:
+    if settings.has_key(key):
+        return "Ready", "tc-status-done"
+    if settings.allow_demo_fallbacks:
+        return "Fallback", "tc-status-running"
+    return "Missing", "tc-status-wait"
+
+
+def _city_summary(state: TravelState) -> str:
+    cities = state.destination_plan.get("cities") or []
+    if cities:
+        return " · ".join(f"{city.get('city')} {city.get('nights')}d" for city in cities)
+    return "Calendar-ready draft"
+
+
+def _dot_class(event_type: str) -> str:
+    return {
+        "flight": "tc-dot-blue",
+        "hotel": "tc-dot-purple",
+        "meal": "tc-dot-amber",
+        "attraction": "tc-dot-teal",
+    }.get(event_type, "tc-dot-muted")
+
+
+def _tag_class(event_type: str) -> str:
+    return {
+        "flight": "tc-tag-flight",
+        "hotel": "tc-tag-hotel",
+        "meal": "tc-tag-food",
+        "attraction": "tc-tag-attraction",
+    }.get(event_type, "tc-tag-attraction")
+
+
+def _event_card_type(event_type: str, status: str) -> str:
+    if "tool" in event_type:
+        return "tool"
+    if status == "error":
+        return "critique"
+    if "review" in event_type:
+        return "critique"
+    if "decision" in event_type:
+        return "decision"
+    return "plan"
+
+
+def _thought_icon(class_name: str) -> str:
+    return {"tool": "◎", "critique": "⚠", "decision": "✓"}.get(class_name, "☷")

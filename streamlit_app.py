@@ -15,12 +15,17 @@ from src.state.travel_state import TravelState, WorkflowState
 from src.tools.calendar_tools import CalendarExportError, generate_ics
 from src.tools.policy import ToolExecutionError
 from src.ui.components import (
+    render_bottom_chat_hint,
     render_approval_panel,
     render_destination_plan,
     render_itinerary,
+    render_main_content_end,
+    render_main_content_start,
     render_preferences,
     render_review_summary,
+    render_shell_marker,
     render_status,
+    render_topbar,
     render_tool_readiness,
     render_trace_panel,
     render_workflow_sidebar,
@@ -30,6 +35,7 @@ from src.ui.styles import APP_CSS
 
 st.set_page_config(page_title="Travel Concierge Agent", layout="wide")
 st.markdown(APP_CSS, unsafe_allow_html=True)
+render_shell_marker()
 
 
 def get_state() -> TravelState:
@@ -221,7 +227,8 @@ with left:
     render_tool_readiness(settings)
 
 with center:
-    st.markdown(f"### {trip_heading(state)}")
+    render_topbar(state, settings)
+    render_main_content_start()
     for message in chat_history:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
@@ -250,6 +257,8 @@ with center:
         st.download_button("Download calendar ICS", state.generated_ics, file_name="travel-itinerary.ics")
     if state.trace_events:
         st.download_button("Download trace JSON", trace_to_json_bytes(state), file_name="travel-trace.json")
+    render_main_content_end()
+    render_bottom_chat_hint()
 
 with right:
     render_trace_panel(state)

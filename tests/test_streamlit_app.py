@@ -43,6 +43,23 @@ def test_streamlit_app_uses_chat_intake_instead_of_trip_form(monkeypatch):
     assert app.selectbox == []
 
 
+def test_streamlit_app_renders_html_sample_shell(monkeypatch):
+    for key in REQUIRED_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+
+    app = AppTest.from_file("streamlit_app.py")
+    app.run(timeout=10)
+
+    markdown = "\n".join(item.value for item in app.markdown)
+    assert "tc-app-shell" in markdown
+    assert "tc-logo" in markdown
+    assert "tc-step-list" in markdown
+    assert "tc-tool-row" in markdown
+    assert "tc-topbar" in markdown
+    assert "tc-bottom-chat" in markdown
+    assert "tc-reasoning-wrapper" in markdown
+
+
 def test_streamlit_app_strict_mode_stops_when_keys_are_missing(monkeypatch):
     for key in REQUIRED_ENV_KEYS:
         monkeypatch.delenv(key, raising=False)
