@@ -42,7 +42,7 @@ def _estimate_google_transit(settings: Settings, query: dict) -> list[dict]:
         json=payload,
         timeout=20,
     )
-    response.raise_for_status()
+    _raise_for_routes_http_error(response)
     return [_extract_distance_matrix_result(response.json(), query)]
 
 
@@ -110,3 +110,36 @@ def _routes_travel_mode(mode: object) -> str:
         "bike": "BICYCLE",
         "transit": "TRANSIT",
     }.get(str(mode or "transit").lower(), "TRANSIT")
+
+
+def _raise_for_routes_http_error(response: requests.Response) -> None:
+    status_code = getattr(response, "status_code", None)
+    if status_code is not None and status_code < 400:
+        return
+
+    details = _google_error_details(response)
+    if status_code == 403:
+        raise RuntimeError(
+            "Google Routes API permission denied. In Google Cloud, enable the Routes API for this project, "
+            "confirm billing is active, and make sure GOOGLE_MAPS_API_KEY is allowed to call routes.googleapis.com. "
+            f"{details}"
+        )
+    if status_code is not None and status_code >= 400:
+        raise RuntimeError(f"Google Routes API returned HTTP {status_code}. {details}")
+
+    response.raise_for_status()
+
+
+def _google_error_details(response: requests.Response) -> str:
+    try:
+        error = response.json().get("error", {})
+    except (AttributeError, ValueError):
+        error = {}
+    status = error.get("status")
+    message = error.get("message") or getattr(response, "text", "")
+    parts = []
+    if status:
+        parts.append(f"Google status: {status}.")
+    if message:
+        parts.append(f"Google message: {message}")
+    return " ".join(parts).strip()

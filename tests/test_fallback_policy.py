@@ -1,4 +1,5 @@
 import pytest
+import requests
 
 from src.config.settings import Settings
 from src.state.travel_state import TravelState
@@ -193,6 +194,40 @@ def test_google_maps_uses_routes_api_v2(monkeypatch):
     assert calls[0]["json"]["travelMode"] == "TRANSIT"
     assert result[0]["duration_minutes"] == 15
     assert result[0]["source"] == "google_routes"
+
+
+def test_google_maps_raises_actionable_routes_permission_error(monkeypatch):
+    class Response:
+        status_code = 403
+        text = "Routes API has not been used in project before or it is disabled."
+
+        def raise_for_status(self):
+            raise requests.HTTPError("403 Client Error: Forbidden")
+
+        def json(self):
+            return {
+                "error": {
+                    "code": 403,
+                    "message": "Routes API has not been used in project before or it is disabled.",
+                    "status": "PERMISSION_DENIED",
+                }
+            }
+
+    def fake_post(*args, **kwargs):
+        return Response()
+
+    monkeypatch.setattr("src.tools.google_maps_tools.requests.post", fake_post)
+
+    with pytest.raises(RuntimeError) as exc:
+        _estimate_google_transit(
+            Settings(None, None, None, "maps-key"),
+            {"origin": "Shinjuku", "destination": "Asakusa", "mode": "transit"},
+        )
+
+    error = str(exc.value)
+    assert "Google Routes API permission denied" in error
+    assert "enable the Routes API" in error
+    assert "PERMISSION_DENIED" in error
 
 
 def test_google_places_uses_places_api_new_text_search(monkeypatch):
