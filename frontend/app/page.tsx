@@ -79,7 +79,11 @@ export default function Home() {
   async function submitChat(event?: FormEvent, preset?: string) {
     event?.preventDefault();
     const text = (preset || message).trim();
-    if (!text || !session || working) return;
+    if (!text || working) return;
+    if (!session) {
+      setError("Still connecting to the travel agent API. Please try again in a moment.");
+      return;
+    }
     setMessage("");
     setError(null);
     setWorking(true);
@@ -253,10 +257,10 @@ export default function Home() {
                 className="onboard-input"
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}
-                placeholder="Type your answer..."
-                disabled={working || state.current_state !== "COLLECTING_REQUIREMENTS"}
+                placeholder={session ? "Type your answer..." : "Connecting to the travel agent..."}
+                disabled={!session || working || state.current_state !== "COLLECTING_REQUIREMENTS"}
               />
-              <button className="onboard-send" type="submit" disabled={working || !message.trim()}>
+              <button className="onboard-send" type="submit" disabled={!session || working || !message.trim()}>
                 <i className="ti ti-arrow-up" />
               </button>
             </form>
@@ -401,9 +405,9 @@ export default function Home() {
               value={message}
               onChange={(event) => setMessage(event.target.value)}
               placeholder="Start a new request in plain English..."
-              disabled={working}
+              disabled={!session || working}
             />
-            <button className="send-btn" type="submit" disabled={working || !message.trim()}>
+            <button className="send-btn" type="submit" disabled={!session || working || !message.trim()}>
               <i className="ti ti-arrow-up" />
             </button>
           </form>

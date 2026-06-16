@@ -1,7 +1,7 @@
 import type { ChatResponse, SessionResponse } from "./types";
 
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") || "";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -39,4 +39,3 @@ export function approveGate(sessionId: string, gate: string): Promise<SessionRes
 export function exportUrl(sessionId: string, file: "itinerary.md" | "calendar.ics" | "trace.json") {
   return `${API_BASE_URL}/api/sessions/${sessionId}/exports/${file}`;
 }
-

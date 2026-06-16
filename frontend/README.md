@@ -19,5 +19,6 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 npm run dev
 
 Set this environment variable in Vercel:
 
-- `NEXT_PUBLIC_API_BASE_URL`: your Render backend URL, for example `https://travel-agent-api.onrender.com`
+- `BACKEND_API_BASE_URL`: your Render backend URL, for example `https://travel-agent-api.onrender.com`
 
+The app calls same-origin `/api/...` routes in Vercel, and those routes proxy requests to the FastAPI backend.

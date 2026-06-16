@@ -83,8 +83,10 @@ Create a Vercel project from this GitHub repo:
 Set this Vercel environment variable:
 
 ```text
-NEXT_PUBLIC_API_BASE_URL=https://your-render-service.onrender.com
+BACKEND_API_BASE_URL=https://your-render-service.onrender.com
 ```
+
+The frontend includes a same-origin `/api/...` proxy route, so browser requests go to Vercel first and Vercel forwards them to Render. `NEXT_PUBLIC_API_BASE_URL` is still supported for direct browser calls, but `BACKEND_API_BASE_URL` is preferred because it avoids CORS and keeps the backend URL server-side.
 
 After Vercel gives you the public URL, update Render's `FRONTEND_ORIGIN` to match it.
 
