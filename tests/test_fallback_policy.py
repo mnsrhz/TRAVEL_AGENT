@@ -129,6 +129,37 @@ def test_tool_adapters_return_fallback_data_when_enabled():
     assert {"origin", "destination", "duration_minutes", "source"}.issubset(transit[0])
 
 
+def test_serpapi_hotels_includes_required_dates(monkeypatch):
+    calls = []
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"properties": [{"name": "Tokyo Stay", "rate_per_night": {"lowest": "$180"}}]}
+
+    def fake_get(url, *, params, timeout):
+        calls.append({"url": url, "params": params, "timeout": timeout})
+        return Response()
+
+    monkeypatch.setattr("src.tools.serpapi_tools.requests.get", fake_get)
+
+    state = TravelState()
+    result = search_hotels(
+        state,
+        Settings(None, "serp-key", None, None, allow_demo_fallbacks=False),
+        {"destination": "Japan", "start_date": "2026-10-10", "days": 5},
+    )
+
+    assert calls[0]["params"]["engine"] == "google_hotels"
+    assert calls[0]["params"]["q"] == "hotels in Japan"
+    assert calls[0]["params"]["check_in_date"] == "2026-10-10"
+    assert calls[0]["params"]["check_out_date"] == "2026-10-15"
+    assert calls[0]["params"]["api_key"] == "serp-key"
+    assert result == [{"name": "Tokyo Stay", "rate_per_night": {"lowest": "$180"}}]
+
+
 def test_google_maps_parser_raises_clear_error_for_malformed_payload():
     with pytest.raises(RuntimeError, match="missing route duration"):
         _extract_distance_matrix_result({"rows": [{"elements": [{"status": "OK"}]}]}, {"origin": "A", "destination": "B"})

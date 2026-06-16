@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from datetime import date, datetime, timedelta
+
 import requests
 
 from src.config.settings import Settings
@@ -39,6 +43,7 @@ def search_hotels(state: TravelState, settings: Settings, query: dict) -> list[d
                 "engine": "google_hotels",
                 "q": f"hotels in {query.get('destination')}",
                 "currency": "USD",
+                **_hotel_date_params(query),
             },
         ),
         fallback_call=lambda: fallback_data.DEMO_HOTELS,
@@ -57,3 +62,32 @@ def _serpapi_search(settings: Settings, params: dict) -> list[dict]:
     if params["engine"] == "google_flights":
         return data.get("best_flights") or data.get("other_flights") or []
     return data.get("properties") or []
+
+
+def _hotel_date_params(query: dict) -> dict[str, str]:
+    check_in = _parse_iso_date(query.get("start_date"))
+    if not check_in:
+        raise RuntimeError("SerpAPI Hotels requires a valid start_date for check_in_date")
+    days = _coerce_positive_int(query.get("days"), default=1)
+    check_out = check_in + timedelta(days=days)
+    return {
+        "check_in_date": check_in.isoformat(),
+        "check_out_date": check_out.isoformat(),
+    }
+
+
+def _parse_iso_date(value: object) -> date | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value)).date()
+    except ValueError:
+        return None
+
+
+def _coerce_positive_int(value: object, *, default: int) -> int:
+    try:
+        coerced = int(float(str(value)))
+    except (TypeError, ValueError):
+        return default
+    return max(1, coerced)
