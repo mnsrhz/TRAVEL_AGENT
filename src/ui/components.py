@@ -251,11 +251,6 @@ def render_approval_panel(title: str, body: str) -> None:
           <div class="tc-approval-head">⚠ {html.escape(title)}</div>
           <div class="tc-approval-body">
             <p>{html.escape(body)}</p>
-            <div class="tc-approval-actions">
-              <span class="tc-faux-btn primary">✓ Approve</span>
-              <span class="tc-faux-btn">✎ Modify</span>
-              <span class="tc-faux-btn danger">↻ Regenerate</span>
-            </div>
           </div>
         </div>
         """,

@@ -99,10 +99,6 @@ APP_CSS = """
 .tc-approval { border:0.5px solid var(--border-mid); border-radius:var(--radius-lg); overflow:hidden; margin:0; }
 .tc-approval-head { background:var(--amber-50); color:var(--amber-800); padding:10px 14px; font-size:12px; font-weight:500; border-bottom:0.5px solid var(--border-light); }
 .tc-approval-body { padding:12px 14px; font-size:12px; color:var(--text-secondary); line-height:1.5; }
-.tc-approval-actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
-.tc-faux-btn { padding:5px 11px; font-size:11px; border-radius:var(--radius-md); border:0.5px solid var(--border-mid); background:var(--bg-primary); color:var(--text-primary); }
-.tc-faux-btn.primary { background:var(--blue-600); border-color:var(--blue-600); color:var(--blue-50); }
-.tc-faux-btn.danger { border-color:var(--red-600); color:var(--red-800); }
 .tc-bottom-chat { padding:10px 14px; border-top:0.5px solid var(--border-light); display:flex; align-items:center; gap:8px; color:var(--text-tertiary); font-size:11px; }
 .stChatInput { background:var(--bg-primary); border-top:0.5px solid var(--border-light); padding:10px 14px; }
 .stChatInput textarea { border:0.5px solid var(--border-mid) !important; border-radius:var(--radius-md) !important; font-size:12px !important; }

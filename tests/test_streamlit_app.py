@@ -163,6 +163,22 @@ def test_streamlit_app_shows_draft_preferences_during_chat_collection(monkeypatc
     assert "Where will you be traveling from?" in markdown
 
 
+def test_streamlit_app_does_not_render_fake_approval_buttons(monkeypatch):
+    for key in REQUIRED_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("ALLOW_DEMO_FALLBACKS", "true")
+
+    app = AppTest.from_file("streamlit_app.py")
+    app.run(timeout=10)
+    submit_trip_chat(app)
+
+    markdown = "\n".join(item.value for item in app.markdown)
+    assert "tc-approval" in markdown
+    assert "tc-faux-btn" not in markdown
+    assert "tc-approval-actions" not in markdown
+    assert app.button(key="approve_preference_confirmation").label == "Approve preferences and research"
+
+
 def test_streamlit_app_exports_markdown_and_trace_before_calendar_ics(monkeypatch):
     for key in REQUIRED_ENV_KEYS:
         monkeypatch.delenv(key, raising=False)
